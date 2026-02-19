@@ -3,26 +3,25 @@
 /* ---------- WebAudio: einmalige Normalisierung (inkl. Safari-Fallback) ---------- */
 window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
-/* ========== Flip-Steuerung ========== */
-/* Flip-Steuerung (neue, isolierte Logik) */
-    const book = document.getElementById('book');
-    const toRight = document.getElementById('toRight');
-    const toLeft  = document.getElementById('toLeft');
+/* ========== Seiten-Navigation ========== */
+    const book      = document.getElementById('book');
+    const navPlayer = document.getElementById('navPlayer');
+    const navEditor = document.getElementById('navEditor');
 
     function showRight(){
       book.classList.add('flipped');
-      toRight.style.display = 'none';
-      toLeft.style.display  = 'flex';
+      navPlayer.classList.remove('active');
+      navEditor.classList.add('active');
     }
     function showLeft(){
       book.classList.remove('flipped');
-      toLeft.style.display  = 'none';
-      toRight.style.display = 'flex';
+      navEditor.classList.remove('active');
+      navPlayer.classList.add('active');
     }
-    toRight.addEventListener('click', showRight);
-    toLeft .addEventListener('click', showLeft);
+    navPlayer.addEventListener('click', showLeft);
+    navEditor.addEventListener('click', showRight);
 
-    // ESC wechselt zurück zur linken Seite (Quality-of-Life)
+    // ESC wechselt zurück zum Player (Quality-of-Life)
     window.addEventListener('keydown', (e)=>{
       if(e.key === 'Escape' && book.classList.contains('flipped')) showLeft();
     });

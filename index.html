@@ -24,16 +24,26 @@
   })();
 </script>
 
-<!-- Floating Flip-Pfeile --> <button aria-label="Zur rechten Seite wechseln" class="flip-arrow right" id="toRight" title="Zur rechten Seite wechseln">
-<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
-<path d="M9 5l7 7-7 7" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-</button>
-<button aria-label="Zur linken Seite wechseln" class="flip-arrow left" id="toLeft" title="Zur linken Seite wechseln">
-<svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
-<path d="M15 5l-7 7 7 7" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-</button>
+<!-- Seiten-Navigation -->
+<nav class="page-nav" id="pageNav" aria-label="Seitennavigation">
+  <button class="page-nav-btn active" id="navPlayer" aria-label="Player">
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1"  y="5"  width="2" height="6"  rx="1" fill="currentColor"/>
+      <rect x="5"  y="2"  width="2" height="12" rx="1" fill="currentColor"/>
+      <rect x="9"  y="4"  width="2" height="8"  rx="1" fill="currentColor"/>
+      <rect x="13" y="6"  width="2" height="4"  rx="1" fill="currentColor"/>
+    </svg>
+    Player
+  </button>
+  <button class="page-nav-btn" id="navEditor" aria-label="Editor">
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2" y="3"  width="12" height="1.5" rx="0.75" fill="currentColor"/>
+      <rect x="2" y="7"  width="9"  height="1.5" rx="0.75" fill="currentColor"/>
+      <rect x="2" y="11" width="11" height="1.5" rx="0.75" fill="currentColor"/>
+    </svg>
+    Editor
+  </button>
+</nav>
 <!-- Floating Media Controls -->
 <div aria-label="Wiedergabesteuerung" class="media-fab">
 <button aria-label="Abspielen" class="fab" id="floatPlay" title="Abspielen">

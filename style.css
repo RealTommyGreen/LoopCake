@@ -68,15 +68,17 @@ body {
 .page {
   position: absolute; inset: 0;
   overflow: auto;
-  padding: 20px;
+  padding: 20px 20px 100px;
   opacity: 0;
-  transform: translateX(12px);
-  transition: opacity .28s ease, transform .28s ease;
+  transform: translateX(52px) scale(0.97);
+  transition: opacity 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              transform 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   pointer-events: none;
+  will-change: opacity, transform;
 }
 .page.left {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateX(0) scale(1);
   z-index: 2;
   pointer-events: auto;
 }
@@ -84,12 +86,12 @@ body {
 
 .book.flipped .page.left {
   opacity: 0;
-  transform: translateX(-12px);
+  transform: translateX(-52px) scale(0.97);
   pointer-events: none;
 }
 .book.flipped .page.right {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateX(0) scale(1);
   z-index: 2;
   pointer-events: auto;
 }
@@ -107,7 +109,7 @@ body {
 .book.flipped::before { opacity: .22; }
 
 @media (prefers-reduced-motion: reduce) {
-  .page { transition: none; }
+  .page, .page-nav-btn, .page-nav-btn::before { transition: none; }
 }
 
 /* Scrollbars */
@@ -115,31 +117,58 @@ body {
 .page::-webkit-scrollbar-thumb { background: #303030; border-radius: 999px; }
 .page::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------- Flip-Pfeile ---------- */
-.flip-arrow {
+/* ---------- Seiten-Navigation ---------- */
+.page-nav {
   position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 9999;
-  width: 48px; height: 48px;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(92,158,255,.35);
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(12, 12, 12, 0.84);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 999px;
-  background: linear-gradient(180deg, #1e1e1e, #111111);
-  box-shadow: 0 8px 30px rgba(0,0,0,.45), 0 0 0 5px rgba(92,158,255,.08);
-  cursor: pointer;
-  transition: transform .15s ease, box-shadow var(--speed) ease, border-color var(--speed) ease, opacity var(--speed) ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.05) inset;
   user-select: none;
 }
-.flip-arrow:hover {
-  border-color: #5c9eff;
-  box-shadow: 0 10px 36px rgba(0,0,0,.55), 0 0 0 6px rgba(92,158,255,.14);
-  transform: translateY(-50%) scale(1.05);
+.page-nav-btn {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  cursor: pointer;
+  transition: color 0.25s ease;
+  white-space: nowrap;
 }
-.flip-arrow:active { transform: translateY(-50%) scale(.98); }
-.flip-arrow.right  { right: 14px; }
-.flip-arrow.left   { left: 14px; display: none; }
-.flip-arrow svg    { width: 26px; height: 26px; }
+.page-nav-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(155deg, #5c9eff, #3271cc);
+  box-shadow: 0 2px 14px rgba(92,158,255,.38);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: -1;
+}
+.page-nav-btn.active         { color: #fff; }
+.page-nav-btn.active::before { opacity: 1; }
+.page-nav-btn:active         { transform: scale(0.96); }
+.page-nav-btn svg            { width: 15px; height: 15px; flex-shrink: 0; }
 
 /* ---------- Logo ---------- */
 .logo-wrap {
