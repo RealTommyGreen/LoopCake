@@ -12,6 +12,18 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
       book.classList.add('flipped');
       navPlayer.classList.remove('active');
       navEditor.classList.add('active');
+      // Immediately highlight + scroll to the current playback line.
+      // Reset lastActiveLine so the guard in updateLyricsHighlight doesn't
+      // suppress the update (the line may already be "active" from the player
+      // side, but the scroll hasn't fired yet because the editor wasn't visible).
+      try {
+        const t = (typeof usingEngine !== 'undefined' && usingEngine &&
+                   typeof getPlayheadTime === 'function')
+                  ? getPlayheadTime()
+                  : (typeof cursorTime !== 'undefined' ? cursorTime : 0);
+        if (typeof lastActiveLine !== 'undefined') lastActiveLine = -1;
+        if (typeof updateLyricsHighlight === 'function') updateLyricsHighlight(t);
+      } catch(_) {}
     }
     function showLeft(){
       book.classList.remove('flipped');
