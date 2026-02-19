@@ -81,15 +81,23 @@ body {
   overflow: auto;
   padding: 20px 20px 100px;
   opacity: 0;
-  transform: translateX(52px) scale(0.97);
-  transition: opacity 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              transform 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* translate3d (not translateX) keeps the element on its own GPU compositor
+     layer in all browsers. scale() is removed – it forces per-frame repaint of
+     the entire page content and is the main cause of jank in Firefox. */
+  transform: translate3d(44px, 0, 0);
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
   will-change: opacity, transform;
+  /* backface-visibility promotes to a compositor layer in Gecko (Firefox) */
+  backface-visibility: hidden;
+  /* contain:paint tells Firefox the page's content won't overflow visually,
+     so it can skip painting checks outside this box during the animation */
+  contain: layout style paint;
 }
 .page.left {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translate3d(0, 0, 0);
   z-index: 2;
   pointer-events: auto;
 }
@@ -97,12 +105,12 @@ body {
 
 .book.flipped .page.left {
   opacity: 0;
-  transform: translateX(-52px) scale(0.97);
+  transform: translate3d(-44px, 0, 0);
   pointer-events: none;
 }
 .book.flipped .page.right {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translate3d(0, 0, 0);
   z-index: 2;
   pointer-events: auto;
 }
@@ -121,6 +129,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .page, .page-nav-btn, .page-nav-btn::before { transition: none; }
+  .page { transform: translate3d(0, 0, 0); }
 }
 
 /* Scrollbars */
@@ -595,8 +604,13 @@ body {
 .page.right .lyricsRow .line {
   font-family: "Bookman Demi", "Bookman Old Style", "URW Bookman L", Bookman, serif;
   text-align: left;
-  display: flex;
-  align-items: center;
+  /* display:flex on a contenteditable causes inconsistent caret placement in
+     empty lines (Chrome: top, Firefox: bottom). Padding centres the caret
+     reliably across all browsers without touching caret positioning. */
+  display: block;
+  padding: 8px 0;
+  line-height: 1.5;
+  min-height: 0;
 }
 
 /* Editor-Toolbar: Grid-Layout */
