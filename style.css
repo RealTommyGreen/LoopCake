@@ -315,38 +315,76 @@ body {
   position: relative;
   display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; align-items: center;
   border: 1px solid var(--muted); background: #1e1e1e; border-radius: 12px; padding: 8px;
-  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow .15s ease, background .15s ease, opacity .15s ease;
 }
 .markerRow.muted   { opacity: .45; filter: grayscale(85%); }
 .markerRow.active  { border-color: #5c9eff; box-shadow: 0 0 0 3px rgba(92,158,255,.15) inset; background: linear-gradient(180deg, #1e1e1e, #161616); }
-.markerRow.dragging {
-  opacity: 1;
-  transform: translateY(-1px) scale(1.015);
-  box-shadow: 0 12px 30px rgba(0,0,0,.55), 0 0 0 2px rgba(92,158,255,.18) inset;
-  z-index: 2;
-}
-.markerRow.drop-target {
-  transform: translateY(0) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0,0,0,.35);
-}
-.markerRow.drop-before::before,
-.markerRow.drop-after::after {
-  content: "";
-  position: absolute; left: 8px; right: 8px; height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(92,158,255,0), rgba(92,158,255,.9), rgba(92,158,255,0));
-  box-shadow: 0 0 12px rgba(92,158,255,.45);
+
+/* Spur die gerade gezogen wird: unsichtbarer Platzhalter (behält Platz) */
+.markerRow.drag-source {
+  opacity: 0;
   pointer-events: none;
 }
-.markerRow.drop-before::before { top: -2px; }
-.markerRow.drop-after::after   { bottom: -2px; }
+
+/* Schwebendes Ghost-Element das dem Cursor folgt */
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 12px;
+  border: 1px solid rgba(92,158,255,0.45);
+  background: #252525;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  box-shadow:
+    0 28px 56px rgba(0,0,0,0.75),
+    0 8px 24px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(92,158,255,0.18) inset;
+  transform: scale(1.03) rotate(1.2deg);
+  animation: ghost-lift 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes ghost-lift {
+  from { transform: scale(1) rotate(0deg); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  to   { transform: scale(1.03) rotate(1.2deg); box-shadow: 0 28px 56px rgba(0,0,0,0.75), 0 8px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(92,158,255,0.18) inset; }
+}
+
+/* Einlege-Indikator: glühende Linie an der Einfügeposition */
+.drag-drop-indicator {
+  position: fixed;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent 0%, #5c9eff 15%, #5c9eff 85%, transparent 100%);
+  box-shadow: 0 0 8px rgba(92,158,255,0.9), 0 0 20px rgba(92,158,255,0.4);
+  pointer-events: none;
+  z-index: 9998;
+  transition: top 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.drag-drop-indicator::before,
+.drag-drop-indicator::after {
+  content: '';
+  position: absolute;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #5c9eff;
+  top: 50%; transform: translateY(-50%);
+  box-shadow: 0 0 6px rgba(92,158,255,1);
+}
+.drag-drop-indicator::before { left: 0; }
+.drag-drop-indicator::after  { right: 0; }
 
 .dragHandle {
-  width: 24px; height: 24px;
+  width: 24px; height: 30px;
   display: flex; align-items: center; justify-content: center;
   cursor: grab; user-select: none; touch-action: none;
+  border-radius: 6px;
+  color: #555;
+  transition: color 0.15s ease, background 0.15s ease;
 }
-.dragHandle:active { cursor: grabbing; }
+.dragHandle:hover { color: #999; background: rgba(255,255,255,0.06); }
+.dragHandle:active { cursor: grabbing; color: #bbb; }
 
 .markerRow .seq-reps .mono { font-weight: 700; }
 

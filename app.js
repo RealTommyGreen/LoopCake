@@ -2390,141 +2390,187 @@ ensureDefaultStartEndMarkers();
   }
   const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
 
-  // Delegated container-level handlers (set up once)
+  // === Floating-Ghost Drag & Drop (einmalig einrichten) ===
   if(!markerListEl._dndBound){
-    let dragId = null;
-    let overRow = null;
-    let overPos = null; // "before" | "after"
+    let dragState  = null;
+    let dropIndEl  = null;
 
-    markerListEl.addEventListener('dragstart', (e)=>{
-      const row = e.target.closest('.markerRow');
-      if(!row) return e.preventDefault();
-      // only allow dragging when starting from handle
-      if(!e.target.closest('.dragHandle')) return e.preventDefault();
-      dragId = row.dataset.id;
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try{ e.dataTransfer.setData('text/plain', dragId); }catch(_){}
-    
-      // Custom drag image for better feel
-      try {
-        const ghost = row.cloneNode(true);
-        ghost.style.width = row.offsetWidth + 'px';
-        ghost.style.position = 'absolute';
-        ghost.style.top = '-9999px';
-        ghost.style.left = '-9999px';
-        ghost.style.opacity = '0.85';
-        document.body.appendChild(ghost);
-        e.dataTransfer.setDragImage(ghost, ghost.offsetWidth/2, ghost.offsetHeight/2);
-        setTimeout(()=>{ try { document.body.removeChild(ghost); } catch(_){} }, 0);
-      } catch(_){}
-    });
+    function getDropIndicator(){
+      if(!dropIndEl){
+        dropIndEl = document.createElement('div');
+        dropIndEl.className = 'drag-drop-indicator';
+        dropIndEl.style.display = 'none';
+        document.body.appendChild(dropIndEl);
+      }
+      return dropIndEl;
+    }
 
-    markerListEl.addEventListener('dragend', (e)=>{
-      const row = e.target.closest('.markerRow');
-      if(row) row.classList.remove('dragging');
-      dragId = null;
-      if(overRow){ overRow.classList.remove('drop-before','drop-after','drop-target'); overRow=null; }
-      overPos = null;
-    });
+    function getAllRows(){ return [...markerListEl.querySelectorAll('.markerRow')]; }
 
-    markerListEl.addEventListener('dragover', (e)=>{
-      e.preventDefault();
-      const row = e.target.closest('.markerRow');
-      if(!row) return;
-      if(overRow && overRow !== row){ overRow.classList.remove('drop-before','drop-after','drop-target'); }
-      overRow = row;
-      row.classList.add('drop-target');
-      const rect = row.getBoundingClientRect();
-      const halfway = rect.top + rect.height/2;
-      const pos = (e.clientY < halfway) ? 'after' : 'before';
-      overPos = pos;
-      row.classList.toggle('drop-before', pos==='before');
-      row.classList.toggle('drop-after',  pos==='after');
-      e.dataTransfer.dropEffect = 'move';
-    });
+    // Berechnet den Einfüge-Index (0..N) anhand gespeicherter natürlicher Mittelpunkte.
+    // Stabil, weil es die Original-Positionen nutzt, nicht animierte Zwischenstände.
+    function computeInsertIdx(clientY){
+      const { srcIdx, naturalMids } = dragState;
+      let idx = 0;
+      naturalMids.forEach((mid, i) => {
+        if(i !== srcIdx && clientY > mid) idx = i + 1;
+      });
+      return idx;
+    }
 
-    markerListEl.addEventListener('drop', (e)=>{
-      e.preventDefault();
-      const row = e.target.closest('.markerRow');
-      if(!row || !dragId) return;
-      const targetId = row.dataset.id;
-      const list = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
-      const from = list.findIndex(m=>m.id===dragId);
-      const toBase = list.findIndex(m=>m.id===targetId);
-      if(from<0 || toBase<0) return;
-      const to = overPos === 'before' ? toBase : toBase+1;
-      reorderById(dragId, to>from ? to-1 : to);
-      renderMarkerList();
-      draw();
-      if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
-    });
+    // Verschiebt alle Nicht-Quell-Zeilen via translateY, um eine sichtbare Lücke zu erzeugen.
+    function applyDisplacements(rows, insertIdx){
+      const { srcIdx, rowHeight } = dragState;
+      const spacing = rowHeight + 10; // Zeilenhöhe + CSS-Gap
+      rows.forEach((row, i) => {
+        if(i === srcIdx){ row.style.transform = ''; return; }
+        let shift = 0;
+        if(insertIdx <= srcIdx){
+          if(i >= insertIdx && i < srcIdx) shift = +spacing;  // Zeilen über Quelle: nach unten
+        } else {
+          if(i > srcIdx && i < insertIdx) shift = -spacing;   // Zeilen unter Quelle: nach oben
+        }
+        row.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    }
 
-    
-    // --- Touch/Pen Fallback: Sortieren per Griffpunkt mit Pointer-Events ---
-    markerListEl.addEventListener('pointerdown', (e)=>{
+    // Positioniert den leuchtenden Einlege-Indikator-Strich.
+    function positionIndicator(rows, insertIdx){
+      const { srcIdx, rowHeight, naturalMids } = dragState;
+      const ind = getDropIndicator();
+      const listRect = markerListEl.getBoundingClientRect();
+      const spacing  = rowHeight + 10;
+      let y = null;
+
+      if(insertIdx === 0){
+        // Vor der allerersten Zeile
+        const firstNonSrc = rows.findIndex((_, i) => i !== srcIdx);
+        if(firstNonSrc >= 0) y = naturalMids[firstNonSrc] - rowHeight / 2 - 5;
+      } else if(insertIdx >= rows.length){
+        // Nach der letzten Zeile
+        const lastNonSrcIdx = [...rows].reduceRight((a, _, i) => a >= 0 ? a : i !== srcIdx ? i : -1, -1);
+        if(lastNonSrcIdx >= 0) y = naturalMids[lastNonSrcIdx] + rowHeight / 2 + 5;
+      } else {
+        // Zwischen zwei Zeilen: Mitte der entstehenden Lücke berechnen
+        const prevIdx = insertIdx - 1;
+        const nextIdx = insertIdx;
+        const prevIsShifted = insertIdx > srcIdx && prevIdx > srcIdx && prevIdx < insertIdx;
+        const nextIsShifted = insertIdx <= srcIdx && nextIdx >= insertIdx && nextIdx < srcIdx;
+        const prevBottom = naturalMids[prevIdx] + rowHeight / 2 + (prevIsShifted ? -spacing : 0);
+        const nextTop    = naturalMids[nextIdx] - rowHeight / 2 + (nextIsShifted ? +spacing : 0);
+        y = (prevBottom + nextTop) / 2;
+      }
+
+      if(y !== null){
+        ind.style.left  = listRect.left + 'px';
+        ind.style.width = listRect.width + 'px';
+        ind.style.top   = (y - 1) + 'px';
+        ind.style.display = 'block';
+      }
+    }
+
+    function onPointerMove(e){
+      if(!dragState) return;
+      const { ghost, srcIdx, offsetY, offsetX } = dragState;
+
+      // Ghost dem Cursor folgen lassen
+      ghost.style.left = (e.clientX - offsetX) + 'px';
+      ghost.style.top  = (e.clientY - offsetY) + 'px';
+
+      // Einfügeposition berechnen und Zeilen verschieben
+      const newInsertIdx = computeInsertIdx(e.clientY);
+      if(newInsertIdx !== dragState.insertIdx){
+        dragState.insertIdx = newInsertIdx;
+        applyDisplacements(getAllRows(), newInsertIdx);
+      }
+      positionIndicator(getAllRows(), newInsertIdx);
+    }
+
+    function onPointerUp(){
+      document.removeEventListener('pointermove', onPointerMove);
+      if(!dragState) return;
+
+      const { id, sourceRow, ghost, srcIdx, insertIdx } = dragState;
+
+      // Ghost und Indikator entfernen
+      ghost.remove();
+      getDropIndicator().style.display = 'none';
+
+      // Alle Transforms und Transitions zurücksetzen
+      getAllRows().forEach(r => { r.style.transform = ''; r.style.transition = ''; });
+      sourceRow.classList.remove('drag-source');
+      dragState = null;
+
+      // Nur neu anordnen wenn sich die Position wirklich geändert hat
+      const moved = insertIdx !== srcIdx && insertIdx !== srcIdx + 1;
+      if(moved){
+        const to = insertIdx > srcIdx ? insertIdx - 1 : insertIdx;
+        reorderById(id, to);
+        renderMarkerList();
+        draw();
+        if(usingEngine) resumeWithUpdatedLoopPreservingPhase();
+      }
+    }
+
+    markerListEl.addEventListener('pointerdown', (e) => {
       const handle = e.target.closest('.dragHandle');
-      if(!handle) return;                      // nur am Griff
-      e.preventDefault();
-
+      if(!handle) return;
       const row = handle.closest('.markerRow');
       if(!row) return;
 
-      // Nativen HTML5-Drag deaktivieren, damit er nicht mit Pointer-Events kollidiert
-      row.draggable = false;
+      e.preventDefault();
 
-      const dragIdLocal = row.dataset.id;
-      let overRow = null;
-      let overPos = null; // 'before' | 'after'
+      const rect     = row.getBoundingClientRect();
+      const rows     = getAllRows();
+      const srcIdx   = rows.indexOf(row);
 
-      row.classList.add('dragging');
+      // Natürliche Mittelpunkte VOR jeglicher Animation festhalten (für stabile Hitbox)
+      const naturalMids = rows.map(r => {
+        const rb = r.getBoundingClientRect();
+        return rb.top + rb.height / 2;
+      });
 
-      function onMove(ev){
-        const el = document.elementFromPoint(ev.clientX, ev.clientY);
-        const targetRow = el && el.closest ? el.closest('.markerRow') : null;
+      // Ghost-Klon erstellen und als schwebendes Element an body hängen
+      const ghost = row.cloneNode(true);
+      ghost.className = 'drag-ghost';
+      ghost.removeAttribute('data-id');
+      Object.assign(ghost.style, {
+        left:   rect.left   + 'px',
+        top:    rect.top    + 'px',
+        width:  rect.width  + 'px',
+        height: rect.height + 'px',
+      });
+      document.body.appendChild(ghost);
 
-        if(overRow && overRow !== targetRow){
-          overRow.classList.remove('drop-before','drop-after','drop-target');
-        }
-        if(targetRow && targetRow !== row){
-          const r = targetRow.getBoundingClientRect();
-          const halfway = r.top + r.height/2;
-          overPos = (ev.clientY < halfway) ? 'after' : 'before';
-          targetRow.classList.add('drop-target');
-          targetRow.classList.toggle('drop-before', overPos === 'before');
-          targetRow.classList.toggle('drop-after',  overPos === 'after');
-        }else{
-          overPos = null;
-        }
-        overRow = targetRow || null;
-      }
+      // Quell-Zeile als unsichtbaren Platzhalter markieren
+      row.classList.add('drag-source');
+      row.style.transition = 'none'; // kein Wobble auf der Quelle
 
-      function onUp(){
-        document.removeEventListener('pointermove', onMove);
-        document.removeEventListener('pointerup', onUp);
-        row.classList.remove('dragging');
-        row.draggable = true; // Nativen Drag wiederherstellen
+      // Sanfte Transitions auf allen anderen Zeilen aktivieren
+      rows.forEach((r, i) => {
+        if(i !== srcIdx)
+          r.style.transition = 'transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      });
 
-        if(overRow && overPos){
-          const list = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
-          const from = list.findIndex(m=> m.id === dragIdLocal);
-          const toBase = list.findIndex(m=> m.id === overRow.dataset.id);
-          if(from >= 0 && toBase >= 0){
-            const to = (overPos === 'before') ? toBase : toBase + 1;
-            reorderById(dragIdLocal, to > from ? to - 1 : to);
-          }
-          overRow.classList.remove('drop-before','drop-after','drop-target');
-          renderMarkerList(); 
-          if (typeof draw === 'function') { try { draw(); } catch(e){} }
-          if (typeof usingEngine !== 'undefined' && usingEngine && typeof resumeWithUpdatedLoopPreservingPhase === 'function') {
-            try { resumeWithUpdatedLoopPreservingPhase(); } catch(e){}
-          }
-        }
-      }
+      // Indikator initialisieren
+      getDropIndicator().style.display = 'none';
 
-      document.addEventListener('pointermove', onMove);
-      document.addEventListener('pointerup', onUp, { once:true });
+      dragState = {
+        id:          row.dataset.id,
+        sourceRow:   row,
+        ghost,
+        srcIdx,
+        insertIdx:   srcIdx,  // Startzustand: keine Änderung
+        rowHeight:   rect.height,
+        naturalMids,
+        offsetY:     e.clientY - rect.top,
+        offsetX:     e.clientX - rect.left,
+      };
+
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup',   onPointerUp,  { once: true });
     });
+
     markerListEl._dndBound = true;
   }
 
@@ -2532,12 +2578,11 @@ ensureDefaultStartEndMarkers();
     const row = document.createElement('div');
     row.className = 'markerRow';
     row.dataset.id = m.id;
-    row.draggable = true;
     try{ row.classList.toggle('muted', !!(m && m.muted && !m.playlistClone)); }catch(_){}
 
     const handle = document.createElement('div');
     handle.className = 'dragHandle';
-    handle.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="#9e9e9e" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    handle.innerHTML = '<svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" fill="currentColor"><circle cx="3" cy="2.5" r="1.5"/><circle cx="7" cy="2.5" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13.5" r="1.5"/><circle cx="7" cy="13.5" r="1.5"/></svg>';
 
     const name = document.createElement('input');
     name.className='field'; name.type='text'; name.value=m.label||''; name.placeholder='Markername';
@@ -3685,16 +3730,24 @@ document.addEventListener('click', async (e) => {
 
     // Altes Signal kurz vor 'when' ausblenden und Stop genau an 'when'
     try{
-      if (engineGain && engineGain.gain){
+      const _oldSrc  = engineSource;
+      const _oldGain = engineGain;
+      if (_oldGain && _oldGain.gain){
         const fadeStart = Math.max(now, when - FADE_MS);
-        engineGain.gain.cancelScheduledValues(now);
+        _oldGain.gain.cancelScheduledValues(now);
         // aktuellen Wert halten bis zum FadeStart
-        engineGain.gain.setValueAtTime(engineGain.gain.value, now);
-        engineGain.gain.setValueAtTime(1, fadeStart);
-        engineGain.gain.linearRampToValueAtTime(0, when);
+        _oldGain.gain.setValueAtTime(_oldGain.gain.value, now);
+        _oldGain.gain.setValueAtTime(1, fadeStart);
+        _oldGain.gain.linearRampToValueAtTime(0, when);
       }
-      if (engineSource && typeof engineSource.stop === 'function'){
-        try { engineSource.stop(when + 0.004); } catch(_){}
+      if (_oldSrc && typeof _oldSrc.stop === 'function'){
+        try { _oldSrc.stop(when + 0.004); } catch(_){}
+        // Falls der Crossfade-Zeitpunkt weit in der Zukunft liegt: alten Source
+        // sofort vom Audio-Graphen trennen, damit er kein Geister-Audio erzeugt.
+        // (Die neue Source übernimmt ab 'when'; bis dahin kurze Stille ist OK.)
+        if (when > now + 0.1) {
+          try { _oldSrc.disconnect(); } catch(_){}
+        }
       }
     }catch(_){}
 
@@ -3830,7 +3883,7 @@ try{
       // Optional: Wiederholungszähler zurücksetzen, falls genutzt
       try{ __seqRepsLeft = 1; }catch(_){}
       const __mN0 = getMarkerById(__nid);
-      if (__mN0) smoothJumpTo(__mN0.time||0, __whenAbs);
+      if (__mN0) smoothJumpTo(__mN0.time||0, NaN); // NaN → sofortiger Crossfade, kein Geister-Audio
       __seqRaf = requestAnimationFrame(__seqMonitor);
       return;
     }
@@ -3852,7 +3905,7 @@ if (t >= segEnd - 0.02){
         seqCurrentStartId = nid0;
         __seqRepsLeft = repsFor(nid0);
         const mN0 = getMarkerById(nid0);
-        if (mN0) smoothJumpTo(mN.time||0, __whenAbs);
+        if (mN0) smoothJumpTo(mN0.time||0, __whenAbs);
         __seqRaf = requestAnimationFrame(__seqMonitor);
         return;
       }
