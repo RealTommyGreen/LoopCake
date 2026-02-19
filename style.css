@@ -15,7 +15,11 @@
 }
 
 /* ---------- Base ---------- */
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  /* Remove the grey/transparent tap-highlight square in Chrome/Safari on click */
+  -webkit-tap-highlight-color: transparent;
+}
 
 /* Suppress browser default focus outline on mouse/touch click;
    keep a styled outline for keyboard navigation (accessibility).
