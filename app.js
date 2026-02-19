@@ -2037,7 +2037,10 @@ cursorTime = +json.cursorTime || 0;
         try { if (timeSigSelect) timeSigSelect.value = String(beatsPerBar); } catch(_) {}
 // auto-marker
 ensureDefaultStartEndMarkers();
-        _showPitchLoadingUI(false);
+        // Wenn Pitch/Tempo aus dem Projekt abweichen, async verarbeiten und
+        // Spinner laufen lassen – sonst sofort ausblenden.
+        try{ _triggerPitchTempoAsync(); }catch(_){}
+        if(!_pitchPending) _showPitchLoadingUI(false);
       }catch(err){ _showPitchLoadingUI(false); alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
     });
 
@@ -2109,7 +2112,10 @@ try{ pendingProject = null; }catch(_){}
 // auto-marker
 
 ensureDefaultStartEndMarkers();
-        _showPitchLoadingUI(false);
+        // Wenn Pitch/Tempo aus dem Projekt abweichen, async verarbeiten und
+        // Spinner laufen lassen – sonst sofort ausblenden.
+        try{ _triggerPitchTempoAsync(); }catch(_){}
+        if(!_pitchPending) _showPitchLoadingUI(false);
       }catch(err){ _showPitchLoadingUI(false); console.warn('Decode fehlgeschlagen:',err); draw(); }
     });
 
