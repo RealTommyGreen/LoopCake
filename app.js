@@ -1063,11 +1063,11 @@ function reorderById(dragId, newIndex){
   const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
   const from = ordered.findIndex(m=>m.id===dragId);
   if(from<0) return;
-  // Prevent moving pinned start/end directly
-  if(ordered[from].pin !== 'start' && ordered[from].pin !== 'end'){
+  // Prevent moving the end pin (stays last); start pin is freely reorderable in Custom Arrangement
+  if(ordered[from].pin !== 'end'){
     // Remove the dragged item
     const [item] = ordered.splice(from,1);
-    // Compute safe insertion window (only end pin is fixed at the back; start pin is freely reorderable)
+    // Compute safe insertion window: end pin is fixed at the back
     let eIdx = ordered.findIndex(m=>m.pin==='end');
     let target = Math.max(0, Math.min(newIndex, ordered.length));
     if(eIdx !== -1) target = Math.min(target, eIdx);
@@ -1703,8 +1703,17 @@ function updateLyricsHighlight(t){
       const waveHeight = waveBottom - waveTop;
       const mid = waveTop + waveHeight/2;
 
-      ctx.fillStyle='#1c1c1c'; ctx.fillRect(0,0,cssW,cssH);
-      ctx.strokeStyle='#1e1e1e'; ctx.strokeRect(0.5,0.5,cssW-1,cssH-1);
+      // Background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, cssH);
+      bgGrad.addColorStop(0,   '#0f0f16');
+      bgGrad.addColorStop(0.5, '#0b0b11');
+      bgGrad.addColorStop(1,   '#090910');
+      ctx.fillStyle = bgGrad; ctx.fillRect(0,0,cssW,cssH);
+      // Subtle center-line glow
+      const midLineGrad = ctx.createLinearGradient(0, mid-1, 0, mid+1);
+      midLineGrad.addColorStop(0, 'rgba(91,159,255,0.06)');
+      midLineGrad.addColorStop(1, 'rgba(91,159,255,0.06)');
+      ctx.fillStyle = midLineGrad; ctx.fillRect(0, mid-0.5, cssW, 1);
 
       // Quick-Loop-Füllung (hat Vorrang)
       try{
@@ -1713,8 +1722,15 @@ function updateLyricsHighlight(t){
           const left  = Math.max(0, Math.min(cssW, timeToX(lr.s, cssW)));
           const right = Math.max(0, Math.min(cssW, timeToX(lr.e, cssW)));
           if(right > left){
-            ctx.fillStyle='rgba(239,68,68,0.22)';
+            const qlGrad = ctx.createLinearGradient(left, 0, right, 0);
+            qlGrad.addColorStop(0,   'rgba(255,80,80,0.06)');
+            qlGrad.addColorStop(0.5, 'rgba(255,80,80,0.2)');
+            qlGrad.addColorStop(1,   'rgba(255,80,80,0.06)');
+            ctx.fillStyle = qlGrad;
             ctx.fillRect(left, waveTop, right-left, waveBottom - waveTop);
+            ctx.fillStyle = 'rgba(255,80,80,0.35)';
+            ctx.fillRect(left, waveTop, right-left, 1);
+            ctx.fillRect(left, waveBottom-1, right-left, 1);
           }
         }
       }catch(e){ /* noop */ }
@@ -1728,7 +1744,15 @@ function updateLyricsHighlight(t){
         const endSample = Math.min(ch.length, Math.ceil(viewEnd() * sampleRate));
         const samplesVisible = Math.max(1, endSample - startSample);
         const sppx = Math.max(1, Math.floor(samplesVisible / cssW));
-        ctx.strokeStyle = '#546e7a';
+        // Waveform – two-pass: dim body + bright core
+        const waveGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
+        waveGrad.addColorStop(0,   'rgba(91,159,255,0.55)');
+        waveGrad.addColorStop(0.35,'rgba(80,140,240,0.75)');
+        waveGrad.addColorStop(0.5, 'rgba(100,165,255,0.95)');
+        waveGrad.addColorStop(0.65,'rgba(80,140,240,0.75)');
+        waveGrad.addColorStop(1,   'rgba(91,159,255,0.55)');
+        ctx.strokeStyle = waveGrad;
+        ctx.lineWidth = 1;
         ctx.beginPath();
         for(let x=0;x<cssW;x++){
           const s0 = startSample + x * sppx;
@@ -1740,6 +1764,7 @@ function updateLyricsHighlight(t){
           ctx.lineTo(x, mid + max*(waveHeight/2-10));
         }
         ctx.stroke();
+        ctx.lineWidth = 1;
       }
 
       // Zeitachse (unten)
@@ -1749,35 +1774,39 @@ function updateLyricsHighlight(t){
         const startMajor = Math.ceil(viewStart/step)*step;
         const startMinor = Math.ceil(viewStart/minor)*minor;
 
-        ctx.strokeStyle='rgba(255,255,255,0.10)';
+        ctx.strokeStyle='rgba(255,255,255,0.07)';
+        ctx.lineWidth = 1;
         for(let t=startMinor; t<=viewEnd()+EPS; t+=minor){
           if(Math.abs((t/step) - Math.round(t/step)) < 1e-6) continue;
           const x = timeToX(t, cssW);
-          ctx.beginPath(); ctx.moveTo(x, waveBottom-8); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, waveBottom-7); ctx.lineTo(x, waveBottom-3); ctx.stroke();
         }
 
-        ctx.strokeStyle='rgba(255,255,255,0.20)';
-        ctx.fillStyle='rgba(224,224,224,0.95)';
-        ctx.font='11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.strokeStyle='rgba(255,255,255,0.16)';
+        ctx.fillStyle='rgba(160,170,200,0.9)';
+        ctx.font='10px ui-monospace, SFMono-Regular, Menlo, monospace';
         for(let t=startMajor; t<=viewEnd()+EPS; t+=step){
           const x = timeToX(t, cssW);
-          ctx.beginPath(); ctx.moveTo(x, waveBottom-14); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, waveBottom-13); ctx.lineTo(x, waveBottom-3); ctx.stroke();
           const lbl = shortTimeLabel(t);
           const w = ctx.measureText(lbl).width;
           const tx = Math.min(Math.max(x - w/2, 2), cssW - w - 2);
-          ctx.fillText(lbl, tx, waveBottom - 16);
+          ctx.fillText(lbl, tx, waveBottom - 15);
         }
       }
 
       // Raster (2-Takt-Linien, Snap)
       const stepGrid = gridStep();
       if(duration>0 && stepGrid>0){
-        ctx.strokeStyle='rgba(92,158,255,0.25)';
+        ctx.strokeStyle='rgba(91,159,255,0.14)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
         const t0 = Math.ceil((viewStart - EPS) / stepGrid) * stepGrid;
         for(let t=t0; t<=viewEnd()+EPS; t+=stepGrid){
           const x = timeToX(t, cssW);
           ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
         }
+        ctx.setLineDash([]);
       }
 
       // Loop-Füllung
@@ -1787,47 +1816,108 @@ function updateLyricsHighlight(t){
         const left = Math.max(0, Math.min(cssW, timeToX(s, cssW)));
         const right = Math.max(0, Math.min(cssW, timeToX(e, cssW)));
         if(right>left){
-          ctx.fillStyle='rgba(92,158,255,0.18)';
+          const loopGrad = ctx.createLinearGradient(left, 0, right, 0);
+          loopGrad.addColorStop(0,   'rgba(91,159,255,0.06)');
+          loopGrad.addColorStop(0.5, 'rgba(91,159,255,0.18)');
+          loopGrad.addColorStop(1,   'rgba(91,159,255,0.06)');
+          ctx.fillStyle = loopGrad;
           ctx.fillRect(left, waveTop, right-left, waveBottom - waveTop);
+          // top + bottom edge lines for loop region
+          ctx.fillStyle = 'rgba(91,159,255,0.4)';
+          ctx.fillRect(left, waveTop, right-left, 1);
+          ctx.fillRect(left, waveBottom-1, right-left, 1);
         }
       }
 
       // Marker + Beschriftungen
       if(markers.length>0 && duration>0){
-        ctx.font='11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.font = 'bold 10px ui-sans-serif, system-ui, -apple-system, sans-serif';
         const sorted = markers.filter(m=>!m.playlistClone).slice().sort((a,b)=>a.time-b.time);
         const visible=sorted.filter(m=>m.time>=viewStart-EPS && m.time<=viewEnd()+EPS);
         visible.forEach(m=>{
           const idx=sorted.findIndex(mm=>mm.id===m.id);
           const labelTop=(idx%2===0);
           const x=timeToX(m.time, cssW);
-          const color = m.active ? 'rgba(239,68,68,0.95)' : 'rgba(92,158,255,0.95)';
-          ctx.strokeStyle=color; ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
+          const isActive = m.active;
+          const lineColor   = isActive ? 'rgba(255,75,75,0.9)' : 'rgba(91,159,255,0.85)';
+          const glowColor   = isActive ? 'rgba(255,75,75,0.25)' : 'rgba(91,159,255,0.2)';
+          const bgColor     = isActive ? 'rgba(40,8,8,0.92)' : 'rgba(8,14,30,0.92)';
+          const borderColor = isActive ? 'rgba(255,75,75,0.7)' : 'rgba(91,159,255,0.6)';
 
+          // Marker line with glow
+          ctx.save();
+          ctx.shadowColor = glowColor; ctx.shadowBlur = 6;
+          ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5;
+          ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
+          ctx.restore();
+
+          // Pill label
           const txt=(m.label||'').slice(0,80);
-          const pad=3, h=16, w=ctx.measureText(txt).width+pad*2;
+          const pad=6, h=17, r=h/2;
+          const w=Math.max(ctx.measureText(txt).width + pad*2, h);
           const lx=Math.min(Math.max(x-w/2,2), cssW-w-2);
-          const ly=labelTop?12:(cssH-12-16);
-          ctx.fillStyle='rgba(17,17,17,0.9)'; ctx.fillRect(lx,ly,w,h);
-          ctx.strokeStyle=color; ctx.strokeRect(lx,ly,w,h);
-          ctx.fillStyle='#e0e0e0'; ctx.fillText(txt, lx+pad, ly+12);
-          ctx.strokeStyle=color; ctx.beginPath();
-          if(labelTop){ ctx.moveTo(x, ly+h); ctx.lineTo(x, waveTop); } else { ctx.moveTo(x, ly); ctx.lineTo(x, waveBottom); }
+          const ly=labelTop?10:(cssH-10-17);
+
+          // Rounded pill background
+          ctx.save();
+          ctx.shadowColor = glowColor; ctx.shadowBlur = 8;
+          ctx.fillStyle = bgColor;
+          ctx.beginPath();
+          ctx.roundRect(lx, ly, w, h, r);
+          ctx.fill();
+          ctx.strokeStyle = borderColor; ctx.lineWidth = 1;
           ctx.stroke();
+          ctx.restore();
+
+          ctx.fillStyle='rgba(230,235,255,0.95)';
+          ctx.textBaseline='middle';
+          ctx.fillText(txt, lx+pad, ly+h/2);
+          ctx.textBaseline='alphabetic';
+
+          // Small triangle connector
+          ctx.save();
+          ctx.shadowColor = glowColor; ctx.shadowBlur = 4;
+          ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          if(labelTop){ ctx.moveTo(x, ly+h+2); ctx.lineTo(x, waveTop); }
+          else         { ctx.moveTo(x, ly-2);   ctx.lineTo(x, waveBottom); }
+          ctx.stroke();
+          ctx.restore();
+
           renderHit.set(m.id, { x, labelRect:{x:lx,y:ly,w,h} });
         });
       }
 
-      // Cursor
+      // Cursor – glowing white playhead
       const cx = timeToX(cursorTime, cssW);
       if(cx>=0 && cx<=cssW){
-        ctx.fillStyle='rgba(255,255,255,0.7)';
-        ctx.fillRect(cx, waveTop, 2, waveBottom - waveTop);
-        const handleY = waveTop - 12;
-        ctx.beginPath(); ctx.arc(cx, handleY, 7, 0, Math.PI*2);
-        ctx.fillStyle='#e0e0e0'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(cx, handleY+6); ctx.lineTo(cx-6, handleY+12); ctx.lineTo(cx+6, handleY+12); ctx.closePath();
-        ctx.fillStyle = '#e0e0e0'; ctx.fill();
+        // Cursor line with glow
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,255,255,0.6)';
+        ctx.shadowBlur = 8;
+        const curGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
+        curGrad.addColorStop(0,   'rgba(255,255,255,0.95)');
+        curGrad.addColorStop(0.5, 'rgba(220,230,255,0.85)');
+        curGrad.addColorStop(1,   'rgba(255,255,255,0.95)');
+        ctx.fillStyle = curGrad;
+        ctx.fillRect(cx-1, waveTop, 2, waveBottom - waveTop);
+        ctx.restore();
+
+        // Handle: downward-pointing triangle at top
+        const handleY = waveTop - 2;
+        const hw = 8, hh = 9;
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,255,255,0.5)';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(cx - hw, handleY - hh);
+        ctx.lineTo(cx + hw, handleY - hh);
+        ctx.lineTo(cx,      handleY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
 
       // Auch im Pause-/Scrub-Zustand Zeilen-Highlight aktualisieren
@@ -3720,7 +3810,7 @@ document.addEventListener('click', async (e) => {
 
     const now  = ac.currentTime;
     const MIN_LEAD   = 0.012;   // minimale Vorlaufzeit zum sicheren Planen (~12ms)
-    const FADE_MS    = 0.008;   // sehr kurze De‑Click Crossfade (~8ms)
+    const FADE_IN    = 0.020;   // Einblend-Dauer neue Source (~20ms, verhindert Knackser)
 
     // Wenn eine absolute Kontextzeit übergeben wurde (exakter Segment‑Boundary),
     // dann exakt dort springen; sonst mit MIN_LEAD in der Zukunft.
@@ -3728,23 +3818,27 @@ document.addEventListener('click', async (e) => {
     // Safety: nicht zu weit in die Zukunft verschieben
     if (when < now + 0.002) when = now + 0.002;
 
-    // Altes Signal kurz vor 'when' ausblenden und Stop genau an 'when'
+    // Altes Signal zum Boundary-Zeitpunkt ausblenden und danach stoppen
     try{
       const _oldSrc  = engineSource;
       const _oldGain = engineGain;
       if (_oldGain && _oldGain.gain){
-        const fadeStart = Math.max(now, when - FADE_MS);
-        _oldGain.gain.cancelScheduledValues(now);
-        // aktuellen Wert halten bis zum FadeStart
-        _oldGain.gain.setValueAtTime(_oldGain.gain.value, now);
-        _oldGain.gain.setValueAtTime(1, fadeStart);
+        // cancelAndHoldAtTime hält den Gain exakt am aktuellen berechneten Wert –
+        // verhindert den Knackser durch abrupten Gain-Sprung auf 1.
+        // Fallback für Browser ohne cancelAndHoldAtTime (z.B. Firefox).
+        if (typeof _oldGain.gain.cancelAndHoldAtTime === 'function') {
+          _oldGain.gain.cancelAndHoldAtTime(now);
+        } else {
+          _oldGain.gain.cancelScheduledValues(now);
+          _oldGain.gain.setValueAtTime(_oldGain.gain.value, now);
+        }
+        // Vom aktuellen Wert (0–1) sanft auf 0 rampen – kein harter Sprung mehr.
         _oldGain.gain.linearRampToValueAtTime(0, when);
       }
       if (_oldSrc && typeof _oldSrc.stop === 'function'){
         try { _oldSrc.stop(when + 0.004); } catch(_){}
         // Falls der Crossfade-Zeitpunkt weit in der Zukunft liegt: alten Source
         // sofort vom Audio-Graphen trennen, damit er kein Geister-Audio erzeugt.
-        // (Die neue Source übernimmt ab 'when'; bis dahin kurze Stille ist OK.)
         if (when > now + 0.1) {
           try { _oldSrc.disconnect(); } catch(_){}
         }
@@ -3760,10 +3854,10 @@ document.addEventListener('click', async (e) => {
     src.loopEnd   = duration || 0;
 
     const g = ac.createGain();
-    // Start bei 0 und sanftes Einblenden ab 'when'
+    // Start bei 0 und längeres Einblenden ab 'when' (20ms statt 8ms → weniger Knackser)
     g.gain.setValueAtTime(0, now);
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(1, when + FADE_MS);
+    g.gain.linearRampToValueAtTime(1, when + FADE_IN);
 
     src.connect(g); g.connect(masterGain);
 
