@@ -132,10 +132,9 @@ body {
   .page { transform: translate3d(0, 0, 0); }
 }
 
-/* Scrollbars */
-.page::-webkit-scrollbar       { width: 10px; }
-.page::-webkit-scrollbar-thumb { background: #303030; border-radius: 999px; }
-.page::-webkit-scrollbar-track { background: transparent; }
+/* Scrollbars ausblenden (Scrollen bleibt funktionsfähig) */
+.page { scrollbar-width: none; -ms-overflow-style: none; }
+.page::-webkit-scrollbar { display: none; }
 
 /* ---------- Seiten-Navigation ---------- */
 .page-nav {
