@@ -3576,9 +3576,7 @@ function firstPlayableId(){
             if(__seqRaf) cancelAnimationFrame(__seqRaf);
             seqCurrentStartId = (window._seqTapHlId && (markers||[]).some(function(m){ return m.id === window._seqTapHlId; }))
               ? window._seqTapHlId
-              : findChronoSegmentStartIdAt(
-                  (typeof getPlayheadTime === 'function') ? getPlayheadTime() : (t||0)
-                );
+              : findChronoSegmentStartIdAt(t||0);
             __seqRaf = requestAnimationFrame(__seqMonitor);
 
         // Enforce no-loop when sequence mode is active
