@@ -1901,6 +1901,7 @@ cursorTime = +json.cursorTime || 0;
 
     loadAudioForProject?.addEventListener('change', async (e)=>{
       const file=e.target.files&&e.target.files[0]; if(!file) return;
+      _showPitchLoadingUI(true);
       try{
         const arrayBuf=await file.arrayBuffer();
         audioBuffer=await getDecodeAC().decodeAudioData(arrayBuf);
@@ -1964,7 +1965,8 @@ cursorTime = +json.cursorTime || 0;
         try { if (timeSigSelect) timeSigSelect.value = String(beatsPerBar); } catch(_) {}
 // auto-marker
 ensureDefaultStartEndMarkers();
-      }catch(err){ alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
+        _showPitchLoadingUI(false);
+      }catch(err){ _showPitchLoadingUI(false); alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
     });
 
     // --- Datei laden ---
@@ -1976,6 +1978,7 @@ ensureDefaultStartEndMarkers();
       relativeAudioName=file.name;
       fileInfo.textContent = file.name || '–';
       audioBuffer=null; duration=0; draw();
+      _showPitchLoadingUI(true);
       try{
         const arrayBuf=await file.arrayBuffer();
         audioBuffer=await getDecodeAC().decodeAudioData(arrayBuf);
@@ -2034,7 +2037,8 @@ try{ pendingProject = null; }catch(_){}
 // auto-marker
 
 ensureDefaultStartEndMarkers();
-      }catch(err){ console.warn('Decode fehlgeschlagen:',err); draw(); }
+        _showPitchLoadingUI(false);
+      }catch(err){ _showPitchLoadingUI(false); console.warn('Decode fehlgeschlagen:',err); draw(); }
     });
 
     // --- Marker-Liste ---
