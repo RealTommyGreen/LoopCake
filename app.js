@@ -12,6 +12,49 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
       book.classList.add('flipped');
       navPlayer.classList.remove('active');
       navEditor.classList.add('active');
+      // Beim Wechsel zur Editorseite: Arrangement-Modus oder Standard-Marker-Modus aktualisieren
+      try {
+        if(arrangementEditorMode){
+          // Arrangement-Modus: Segment-Struktur neu berechnen, Lyrics-Inhalte per segKey erhalten
+          const newSegs = buildArrangementForEditor();
+          if(newSegs.length > 0){
+            const oldKeyToLines = new Map();
+            for(const oldSeg of arrangementSegments){
+              oldKeyToLines.set(oldSeg.segKey, lyrics.slice(oldSeg.lineStartIdx, oldSeg.lineStartIdx + oldSeg.lineCount));
+            }
+            const newTotal = newSegs[newSegs.length - 1].lineStartIdx + newSegs[newSegs.length - 1].lineCount;
+            const newLyrics = new Array(newTotal).fill('');
+            for(const newSeg of newSegs){
+              const oldLines = oldKeyToLines.get(newSeg.segKey) || [];
+              for(let j = 0; j < Math.min(newSeg.lineCount, oldLines.length); j++){
+                newLyrics[newSeg.lineStartIdx + j] = oldLines[j] || '';
+              }
+            }
+            lyrics = newLyrics;
+            arrangementSegments = newSegs;
+          }
+        } else {
+          // Standard-Modus: Marker-Headers automatisch neu berechnen
+          const bl = barLen();
+          if (isFinite(bl) && bl > 0) {
+            perSegmentLineNumbering = true;
+            const headers = [];
+            (markers||[])
+              .filter(m => (m.label||'').trim().length > 0 && m.playlistClone !== true)
+              .forEach(m => {
+                const barNumber = Math.floor((m.time + timeTol()) / bl) + 1;
+                const lineIdx   = Math.floor((barNumber - 1) / 2) + 1;
+                headers.push({ lineIdx, label: m.label.trim(), bar: barNumber });
+              });
+            headers.sort((a,b) => a.lineIdx - b.lineIdx || a.bar - b.bar);
+            markerHeaders = headers;
+          } else {
+            perSegmentLineNumbering = false;
+            markerHeaders = [];
+          }
+        }
+        renderLyricsList();
+      } catch(_) {}
       // Immediately highlight + scroll to the current playback line.
       // Reset lastActiveLine so the guard in updateLyricsHighlight doesn't
       // suppress the update (the line may already be "active" from the player
@@ -697,6 +740,17 @@ updateTempoUI();
     let autoScrollEnabled = true; // Autoscroll-Toggle
     let lastActiveLine = -1; // Index der aktuell gehighlighteten Zeile
 
+    // Custom-Arrangement-Editor-Modus
+    let arrangementEditorMode = false; // true = Zeilenlayout folgt Custom Arrangement
+    let arrangementSegments = [];
+    let _arrangementRestoreData = null; // Gespeicherte Arrangement-Daten beim Projekt-Laden
+    let orphanedLines = []; // [{label:string, lines:string[]}] – verwaiste Zeilen nach "Nein"-Löschen
+    // arrangementSegments[i] = {
+    //   markerId, label, audioStart, audioEnd,
+    //   isClone, cloneOf, repIndex, totalReps,
+    //   lineStartIdx, lineCount, segKey
+    // }
+
     // Viewport
     let viewStart = 0;   // s
     let viewDur = 0;     // s
@@ -1082,6 +1136,15 @@ const QL_LONG_MS = 350;   // Long-Press Schwelle
 const QL_MOVE_TOL = 8;    // Bewegungs-Toleranz gegen versehentliches Ziehen
 
 function lineStartTimeFromIndex(lineIdx0){
+  if (arrangementEditorMode && arrangementSegments.length > 0) {
+    for (const seg of arrangementSegments) {
+      if (lineIdx0 >= seg.lineStartIdx && lineIdx0 < seg.lineStartIdx + seg.lineCount) {
+        const bl = barLen();
+        return Math.max(0, seg.audioStart + (lineIdx0 - seg.lineStartIdx) * 2 * bl);
+      }
+    }
+    return 0;
+  }
   const bl = barLen();         // 1 Takt
   return Math.max(0, lineIdx0 * 2 * bl); // 2 Takte pro Zeile
 }
@@ -1275,6 +1338,11 @@ function getLoopRegion(){
 
     // ---------- Texteditor-Logik ----------
     function computeCounts(){
+      if(arrangementEditorMode && arrangementSegments.length > 0){
+        const totalLines = arrangementSegments[arrangementSegments.length - 1].lineStartIdx
+                         + arrangementSegments[arrangementSegments.length - 1].lineCount;
+        return { bars: totalLines * 2, lines: totalLines };
+      }
       if(!duration || !isFinite(duration)) return { bars:0, lines:0 };
       const bl = barLen();
       if(!isFinite(bl) || bl<=0) return { bars:0, lines:0 };
@@ -1290,15 +1358,40 @@ function getLoopRegion(){
 
       // Map der Segment-Header pro Zeile (1-basiert)
       const headersByLine = new Map();
-      markerHeaders.forEach(h=>{
-        if(h.lineIdx>=1 && h.lineIdx<=lines){
-          if(!headersByLine.has(h.lineIdx)) headersByLine.set(h.lineIdx, []);
-          headersByLine.get(h.lineIdx).push(h);
+      // Set der gemuteten Zeilenindizes für schnellen Lookup
+      const mutedLineSet = new Set();
+      if(arrangementEditorMode && arrangementSegments.length > 0){
+        for(const seg of arrangementSegments){
+          if(seg.isMuted){
+            for(let j = 0; j < seg.lineCount; j++) mutedLineSet.add(seg.lineStartIdx + j);
+          }
         }
-      });
+      }
+
+      if(arrangementEditorMode && arrangementSegments.length > 0){
+        // Im Arrangement-Modus: Header aus arrangementSegments ableiten
+        for(const seg of arrangementSegments){
+          const lineIdx1 = seg.lineStartIdx + 1; // 1-basiert
+          if(!headersByLine.has(lineIdx1)) headersByLine.set(lineIdx1, []);
+          // Bezeichnung: Klone bekommen "(Kopie)", seqReps>1 bekommt "(1/N)"
+          let headerLabel = seg.label || '–';
+          if(seg.totalReps > 1) headerLabel += ' (' + (seg.repIndex + 1) + '/' + seg.totalReps + ')';
+          headersByLine.get(lineIdx1).push({ lineIdx: lineIdx1, label: headerLabel, bar: 0, isClone: seg.isClone, isMuted: seg.isMuted });
+        }
+      } else {
+        markerHeaders.forEach(h=>{
+          if(h.lineIdx>=1 && h.lineIdx<=lines){
+            if(!headersByLine.has(h.lineIdx)) headersByLine.set(h.lineIdx, []);
+            headersByLine.get(h.lineIdx).push(h);
+          }
+        });
+      }
       // --- Berechnung der Segmentstarts für per-segment Zeilennummern ---
       let segStarts = [];
-      if (perSegmentLineNumbering && Array.isArray(markerHeaders) && markerHeaders.length > 0) {
+      if(arrangementEditorMode && arrangementSegments.length > 0){
+        segStarts = arrangementSegments.map(s => s.lineStartIdx + 1).filter(v => v >= 1);
+        if(segStarts.length > 0 && segStarts[0] !== 1) segStarts.unshift(1);
+      } else if (perSegmentLineNumbering && Array.isArray(markerHeaders) && markerHeaders.length > 0) {
         const s = new Set();
         markerHeaders.forEach(h => { if (Number.isFinite(h.lineIdx)) s.add(Math.max(1, Math.floor(h.lineIdx))); });
         segStarts = Array.from(s).sort((a,b)=>a-b);
@@ -1313,12 +1406,14 @@ function getLoopRegion(){
         headers.sort((a,b)=> a.bar - b.bar);
         headers.forEach(h=>{
           const seg = document.createElement('div');
-          seg.className = 'segmentHeader';
+          seg.className = 'segmentHeader' + (h.isClone ? ' clone' : '') + (h.isMuted ? ' muted' : '');
           seg.textContent = `${h.label}`;
           lyricsListEl.appendChild(seg);
         });
 
-        const row = document.createElement('div'); row.className = 'lyricsRow'; row.dataset.idx = i;
+        const row = document.createElement('div');
+        row.className = 'lyricsRow' + (mutedLineSet.has(i) ? ' muted' : '');
+        row.dataset.idx = i;
         const idx = document.createElement('div'); idx.className = 'idx'; let __displayIdx = i + 1;
         if (perSegmentLineNumbering && segStarts.length) {
           while ((segPtr + 1) < segStarts.length && (i + 1) >= segStarts[segPtr + 1]) segPtr++;
@@ -1365,6 +1460,13 @@ idx.addEventListener('pointerup', (ev)=>{
   clearTimeout(qlLongTimer); qlLongTimer=null;
   if(!longFired){
     const t = lineStartTimeFromIndex(i);
+    // Fix: Bei Kopiespuren muss _seqTapHlId auf die Marker-ID des geklickten
+    // Segments gesetzt werden, damit Highlighting und Playback die Kopiespur
+    // verfolgen und nicht immer zur Originalspur springen.
+    if(arrangementEditorMode && arrangementSegments && arrangementSegments.length > 0){
+      const seg = arrangementSegments.find(s => i >= s.lineStartIdx && i < s.lineStartIdx + s.lineCount);
+      if(seg) window._seqTapHlId = seg.markerId;
+    }
     setCursor(t, true);
     if(usingEngine) restartEngineAt(cursorTime);
     draw();
@@ -1383,6 +1485,47 @@ idx.addEventListener('pointercancel', ()=>{
         lyricsListEl.appendChild(row);
       }
       applyQuickLoopClasses();
+
+      // --- Verwaiste Zeilen (nach "Nein"-Löschen) am Ende anzeigen ---
+      if(arrangementEditorMode && Array.isArray(orphanedLines) && orphanedLines.length > 0){
+        const orphanSep = document.createElement('div');
+        orphanSep.className = 'segmentHeader orphaned-header';
+        orphanSep.textContent = '— Gelöschte Spuren (Zeilen behalten) —';
+        lyricsListEl.appendChild(orphanSep);
+
+        orphanedLines.forEach((group, groupIdx) => {
+          const groupHeaderEl = document.createElement('div');
+          groupHeaderEl.className = 'segmentHeader clone orphaned-subheader';
+          groupHeaderEl.textContent = group.label || '–';
+          lyricsListEl.appendChild(groupHeaderEl);
+
+          group.lines.forEach((lineContent, lineJ) => {
+            const row = document.createElement('div');
+            row.className = 'lyricsRow orphaned';
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn orphaned-del';
+            delBtn.title = 'Zeile löschen';
+            delBtn.textContent = '✕';
+            delBtn.addEventListener('click', ()=>{
+              group.lines.splice(lineJ, 1);
+              if(group.lines.length === 0) orphanedLines.splice(groupIdx, 1);
+              renderLyricsList();
+            });
+
+            const line = document.createElement('div');
+            line.className = 'line';
+            line.contentEditable = 'true';
+            line.spellcheck = false;
+            line.textContent = lineContent;
+            line.addEventListener('input', ()=>{ group.lines[lineJ] = line.textContent; });
+
+            row.appendChild(delBtn);
+            row.appendChild(line);
+            lyricsListEl.appendChild(row);
+          });
+        });
+      }
     }
     
 
@@ -1470,12 +1613,65 @@ function ensureDefaultStartEndMarkers() {
       }catch(_){}
     }
 function updateLyricsHighlight(t){
+      if(arrangementEditorMode && arrangementSegments.length > 0){
+        _updateArrangementHighlight(t);
+        return;
+      }
       const { lines } = computeCounts();
       if(lines<=0){ setActiveLine(-1); return; }
       const bl = barLen();
       if(!isFinite(bl) || bl<=0){ setActiveLine(-1); return; }
       const barIdx = Math.floor((t + timeTol()) / bl);
       const lineIdx = Math.floor(barIdx / 2);
+      if(lineIdx !== lastActiveLine) setActiveLine(lineIdx);
+    }
+
+    function _updateArrangementHighlight(t){
+      const bl = barLen();
+      if(!isFinite(bl) || bl <= 0){ setActiveLine(-1); return; }
+
+      let targetSeg = null;
+      const seqOn = !!(playSeqOrder && usingEngine && !(window.quickLoop && window.quickLoop.active));
+
+      if(seqOn && seqCurrentStartId){
+        // Im Custom-Arrangement-Playback: seqCurrentStartId + Wiederholungsindex
+        const state = window.__seqMonitorState || {};
+        const repsLeft  = (state.id === seqCurrentStartId && state.repsLeft != null) ? state.repsLeft : null;
+        const occurrences = arrangementSegments.filter(s => s.markerId === seqCurrentStartId);
+        if(occurrences.length === 1){
+          targetSeg = occurrences[0];
+        } else if(occurrences.length > 1 && repsLeft != null){
+          // repsLeft zählt abwärts: erstes Vorkommen hat höchsten repsLeft-Wert
+          const totalReps = occurrences[0].totalReps;
+          const repIdx    = Math.max(0, totalReps - repsLeft);
+          targetSeg = occurrences.find(s => s.repIndex === repIdx) || occurrences[0];
+        } else if(occurrences.length > 0){
+          targetSeg = occurrences[0];
+        }
+      } else {
+        // Kein Arrangement-Playback: Segment anhand der Audio-Zeit finden
+        // Wenn ein expliziter Marker (Quick Jump oder Marker-Tap) gewählt wurde,
+        // diesen bevorzugen – nötig damit Kopiespuren korrekt hervorgehoben werden.
+        if(window._seqTapHlId){
+          const forced = arrangementSegments.find(s => s.markerId === window._seqTapHlId && t >= s.audioStart - 1e-6 && t < s.audioEnd + 1e-6);
+          if(forced) targetSeg = forced;
+        }
+        if(!targetSeg) targetSeg = arrangementSegments.find(s => t >= s.audioStart - 1e-6 && t < s.audioEnd + 1e-6);
+        if(!targetSeg && arrangementSegments.length > 0){
+          // Nächstgelegenes Segment als Fallback
+          targetSeg = arrangementSegments.reduce((best, s) => {
+            const d    = Math.max(s.audioStart - t, t - s.audioEnd, 0);
+            const bd   = best ? Math.max(best.audioStart - t, t - best.audioEnd, 0) : Infinity;
+            return d < bd ? s : best;
+          }, null);
+        }
+      }
+
+      if(!targetSeg){ setActiveLine(-1); return; }
+
+      const offsetInSeg = Math.max(0, t - targetSeg.audioStart);
+      const lineOffset  = Math.floor(Math.floor((offsetInSeg + timeTol()) / bl) / 2);
+      const lineIdx     = targetSeg.lineStartIdx + Math.min(lineOffset, targetSeg.lineCount - 1);
       if(lineIdx !== lastActiveLine) setActiveLine(lineIdx);
     }
 
@@ -1850,7 +2046,17 @@ function updateLyricsHighlight(t){
           end: Number.isFinite(projectTrim.end) ? projectTrim.end : (duration||0)
         },
         pitchSt: pitchSt,
-        playbackTempoBpm: playbackTempoBpm
+        playbackTempoBpm: playbackTempoBpm,
+        arrangementEditorMode: !!arrangementEditorMode,
+        // Lyrics per segKey speichern – stabile Marker-ID-Zuordnung, unabhängig von Position
+        arrangementLyrics: (arrangementEditorMode && arrangementSegments.length > 0) ? (()=>{
+          const out = {};
+          for(const seg of arrangementSegments){
+            out[seg.segKey] = lyrics.slice(seg.lineStartIdx, seg.lineStartIdx + seg.lineCount);
+          }
+          return out;
+        })() : null,
+        orphanedLines: Array.isArray(orphanedLines) ? orphanedLines.map(g=>({ label: g.label, lines: g.lines.slice() })) : []
       };
     }
 
@@ -1881,6 +2087,10 @@ function updateLyricsHighlight(t){
         
         // Stash project JSON until audio is selected
         try{ pendingProject = json || null; }catch(_){ pendingProject = null; }
+        // Arrangement-Wiederherstellungsdaten separat speichern (unabhängig von pendingProject)
+        _arrangementRestoreData = (json.arrangementEditorMode === true && json.arrangementLyrics && typeof json.arrangementLyrics === 'object')
+          ? { lyrics: json.arrangementLyrics }
+          : null;
         try{ loadedProjectMarkerBase = (json && json.markerTimeBase === 'original') ? 'original' : 'trimmed'; }catch(_){ loadedProjectMarkerBase = 'trimmed'; }
         // Preload trim info (seconds in original timeline)
         try{
@@ -1930,8 +2140,16 @@ cursorTime = +json.cursorTime || 0;
         const vd = Number.isFinite(json.viewDur) && json.viewDur>0 ? +json.viewDur : (duration||0);
         setView(vs, vd>0?vd:(duration||0));
 
+        // Arrangement-Editor-Modus zurücksetzen – wird nach Audio-Decode wiederhergestellt
+        arrangementEditorMode = false; arrangementSegments = [];
+        try{ if(importMarkersBtn) importMarkersBtn.classList.remove('active'); }catch(_){}
+
         // Lyrics laden (werden nach Audio-Decode auf richtige Länge gebracht)
         lyrics = Array.isArray(json.lyrics) ? json.lyrics.slice() : [];
+        // Verwaiste Zeilen wiederherstellen
+        orphanedLines = Array.isArray(json.orphanedLines)
+          ? json.orphanedLines.map(g=>({ label: String(g.label||''), lines: Array.isArray(g.lines) ? g.lines.map(String) : [] })).filter(g=>g.lines.length>0)
+          : [];
         renderLyricsList();
 
         renderMarkerList(); draw();
@@ -1951,17 +2169,9 @@ cursorTime = +json.cursorTime || 0;
               });
             headersAuto.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
             markerHeaders = headersAuto;
-            if(importMarkersBtn){
-              importMarkersBtn.classList.add('active');
-              importMarkersBtn.textContent = 'Marker übernommen';
-            }
           }else{
             perSegmentLineNumbering = false;
             markerHeaders = [];
-            if(importMarkersBtn){
-              importMarkersBtn.classList.remove('active');
-              importMarkersBtn.textContent = 'Marker übernehmen';
-            }
           }
           renderLyricsList();
         }catch(e){ /* noop */ }
@@ -2037,6 +2247,31 @@ cursorTime = +json.cursorTime || 0;
         try { if (timeSigSelect) timeSigSelect.value = String(beatsPerBar); } catch(_) {}
 // auto-marker
 ensureDefaultStartEndMarkers();
+
+        // Arrangement-Editor-Modus aus Projekt wiederherstellen
+        try{
+          if(_arrangementRestoreData && _arrangementRestoreData.lyrics){
+            const segs = buildArrangementForEditor();
+            if(segs.length > 0){
+              const totalLines = segs[segs.length - 1].lineStartIdx + segs[segs.length - 1].lineCount;
+              const newLyrics  = new Array(totalLines).fill('');
+              for(const seg of segs){
+                const segLines = _arrangementRestoreData.lyrics[seg.segKey] || [];
+                for(let j = 0; j < Math.min(seg.lineCount, segLines.length); j++){
+                  newLyrics[seg.lineStartIdx + j] = segLines[j] || '';
+                }
+              }
+              lyrics              = newLyrics;
+              arrangementSegments = segs;
+              arrangementEditorMode = true;
+              perSegmentLineNumbering = true;
+              try{ if(importMarkersBtn) importMarkersBtn.classList.add('active'); }catch(_){}
+              renderLyricsList();
+            }
+          }
+          _arrangementRestoreData = null;
+        }catch(_){ _arrangementRestoreData = null; }
+
         // Wenn Pitch/Tempo aus dem Projekt abweichen, async verarbeiten und
         // Spinner laufen lassen – sonst sofort ausblenden.
         try{ _triggerPitchTempoAsync(); }catch(_){}
@@ -2059,6 +2294,9 @@ ensureDefaultStartEndMarkers();
         audioBuffer=await getDecodeAC().decodeAudioData(arrayBuf);
         duration=audioBuffer.duration; sampleRate=audioBuffer.sampleRate;
         pitchedBuffer = null; pitchSt = 0; try{ updatePitchUI(); }catch(_){} playbackTempoBpm = null; try{ updateTempoUI(); }catch(_){}
+        // Neue Datei → Arrangement-Editor-Modus zurücksetzen
+        arrangementEditorMode = false; arrangementSegments = [];
+        try{ if(importMarkersBtn) importMarkersBtn.classList.remove('active'); }catch(_){}
 
         minView=Math.max(0.25, gridStep()/4);
         setView(0, duration);
@@ -2112,6 +2350,29 @@ try{ pendingProject = null; }catch(_){}
 // auto-marker
 
 ensureDefaultStartEndMarkers();
+        // Arrangement-Editor-Modus aus Projekt wiederherstellen (falls Projekt über fileInput geladen)
+        try{
+          if(_arrangementRestoreData && _arrangementRestoreData.lyrics){
+            const segs = buildArrangementForEditor();
+            if(segs.length > 0){
+              const totalLines = segs[segs.length - 1].lineStartIdx + segs[segs.length - 1].lineCount;
+              const newLyrics  = new Array(totalLines).fill('');
+              for(const seg of segs){
+                const segLines = _arrangementRestoreData.lyrics[seg.segKey] || [];
+                for(let j = 0; j < Math.min(seg.lineCount, segLines.length); j++){
+                  newLyrics[seg.lineStartIdx + j] = segLines[j] || '';
+                }
+              }
+              lyrics              = newLyrics;
+              arrangementSegments = segs;
+              arrangementEditorMode = true;
+              perSegmentLineNumbering = true;
+              try{ if(importMarkersBtn) importMarkersBtn.classList.add('active'); }catch(_){}
+              renderLyricsList();
+            }
+          }
+          _arrangementRestoreData = null;
+        }catch(_){ _arrangementRestoreData = null; }
         // Wenn Pitch/Tempo aus dem Projekt abweichen, async verarbeiten und
         // Spinner laufen lassen – sonst sofort ausblenden.
         try{ _triggerPitchTempoAsync(); }catch(_){}
@@ -2347,17 +2608,20 @@ ensureDefaultStartEndMarkers();
       actionBtn.title = 'Diese Playlist-Kopie entfernen';
       actionBtn.addEventListener('click', ()=>{
         try{
-          // Entfernen und ListOrder neu indizieren
-          const idx = markers.findIndex(x => x.id === m.id);
-          if(idx >= 0){
-            const removedOrder = markers[idx].listOrder ?? idx;
-            markers.splice(idx,1);
-            // close gaps
-            markers.forEach(mm=>{
-              if((mm.listOrder ?? 0) > removedOrder) mm.listOrder = (mm.listOrder ?? 0) - 1;
+          if(arrangementEditorMode && arrangementSegments.length > 0){
+            const mySegs = arrangementSegments.filter(s => s.markerId === m.id);
+            const hasContent = mySegs.some(s => {
+              for(let j = 0; j < s.lineCount; j++){
+                if((lyrics[s.lineStartIdx + j] || '').trim().length > 0) return true;
+              }
+              return false;
             });
-            renderMarkerList();
+            if(hasContent){
+              _showCloneDeleteDialog(m);
+              return;
+            }
           }
+          _deleteCloneMarker(m, false);
         }catch(e){ console.warn('del error', e); }
       });
     }else{
@@ -2368,6 +2632,7 @@ ensureDefaultStartEndMarkers();
         try{
           m.muted = !m.muted;
           renderMarkerList();
+          if(arrangementEditorMode) applyArrangementToEditor();
           try{
             if(window.playSeqOrder && typeof window.getPlayheadTime === 'function' && typeof window.startEngineAt === 'function'){
               startEngineAt(getPlayheadTime());
@@ -2785,6 +3050,162 @@ function buildArrangementSegmentsSR(sr){
   return segs;
 }
 
+// ===== Custom-Arrangement-Editor-Funktionen =====
+
+// --- Hilfsfunktionen für Kopiespur-Löschung ---
+function _deleteCloneMarker(m, keepOrphaned){
+  try{
+    if(keepOrphaned && arrangementEditorMode && arrangementSegments.length > 0){
+      const mySegs = arrangementSegments.filter(s => s.markerId === m.id);
+      for(const seg of mySegs){
+        const lines = [];
+        for(let j = 0; j < seg.lineCount; j++) lines.push(lyrics[seg.lineStartIdx + j] || '');
+        // Gruppenbezeichnung: Label + ggf. Wiederholungsindex
+        let groupLabel = seg.label || m.label || '–';
+        if(seg.totalReps > 1) groupLabel += ' (' + (seg.repIndex + 1) + '/' + seg.totalReps + ')';
+        orphanedLines.push({ label: groupLabel, lines });
+      }
+    }
+    const idx = markers.findIndex(x => x.id === m.id);
+    if(idx >= 0){
+      const removedOrder = markers[idx].listOrder ?? idx;
+      markers.splice(idx, 1);
+      markers.forEach(mm=>{ if((mm.listOrder ?? 0) > removedOrder) mm.listOrder = (mm.listOrder ?? 0) - 1; });
+      renderMarkerList();
+      if(arrangementEditorMode) applyArrangementToEditor();
+    }
+  }catch(e){ console.warn('_deleteCloneMarker error', e); }
+}
+
+function _showCloneDeleteDialog(m){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.style.cssText = 'display:flex;z-index:200000;';
+  backdrop.innerHTML = `
+    <div class="modal-card" style="max-width:360px" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title">Kopiespur löschen</div>
+      </div>
+      <div class="modal-body" style="padding:8px 0;font-size:14px;color:#e2e2e2;line-height:1.5;">
+        Achtung, Zeilen enthalten Text, auch löschen?
+      </div>
+      <div class="modal-footer" style="gap:10px;">
+        <button class="btn" id="_dcd_ja">Ja</button>
+        <button class="btn" id="_dcd_nein">Nein</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  function close(){ backdrop.remove(); }
+  backdrop.querySelector('#_dcd_ja').addEventListener('click', ()=>{ close(); _deleteCloneMarker(m, false); });
+  backdrop.querySelector('#_dcd_nein').addEventListener('click', ()=>{ close(); _deleteCloneMarker(m, true); });
+  backdrop.addEventListener('click', e=>{ if(e.target === backdrop) close(); });
+}
+
+function buildArrangementForEditor(){
+  try{ if(typeof ensureListOrder === 'function') ensureListOrder(); }catch(_){}
+  const bl = barLen();
+  if(!isFinite(bl) || bl <= 0) return [];
+  const list = __markersByList();
+  const segments = [];
+  const occurrenceCount = {}; // markerId → bisherige Anzahl Vorkommen (für segKey + repIndex)
+
+  for(const m of list){
+    if(!m || m.pin === 'end') continue;
+    const audioStart = Math.max(0, Math.min(duration||0, m.time||0));
+    const audioEnd   = __segmentEndTimeForStartId(m.id);
+    const segDur     = audioEnd - audioStart;
+    if(segDur < 1e-4) continue;
+
+    const totalReps = __repsFor(m.id);
+    const bars      = Math.floor((segDur + timeTol()) / bl);
+    const lineCount = Math.floor(bars / 2);
+    if(lineCount <= 0) continue;
+
+    for(let repIdx = 0; repIdx < totalReps; repIdx++){
+      const occIdx = (occurrenceCount[m.id] || 0);
+      occurrenceCount[m.id] = occIdx + 1;
+      segments.push({
+        markerId:   m.id,
+        label:      (m.label || '').trim(),
+        audioStart,
+        audioEnd,
+        isClone:    !!m.playlistClone,
+        isMuted:    __isMutedOriginal(m),
+        cloneOf:    m.playlistCloneOf || null,
+        repIndex:   repIdx,
+        totalReps,
+        lineStartIdx: -1, // wird unten gesetzt
+        lineCount,
+        segKey:     m.id + '_' + occIdx,
+      });
+    }
+  }
+
+  // lineStartIdx zuweisen
+  let runningLine = 0;
+  for(const seg of segments){
+    seg.lineStartIdx = runningLine;
+    runningLine += seg.lineCount;
+  }
+  return segments;
+}
+
+function applyArrangementToEditor(){
+  const bl = barLen();
+  if(!isFinite(bl) || bl <= 0){
+    alert('Bitte BPM einstellen, damit das Arrangement berechnet werden kann.');
+    return;
+  }
+  const segs = buildArrangementForEditor();
+  if(segs.length === 0){
+    alert('Keine verwertbaren Segmente im Custom Arrangement gefunden.');
+    return;
+  }
+
+  const totalLines = segs[segs.length - 1].lineStartIdx + segs[segs.length - 1].lineCount;
+  const newLyrics  = new Array(totalLines).fill('');
+
+  if(arrangementEditorMode && arrangementSegments.length > 0){
+    // Bereits im Arrangement-Modus: Inhalte per segKey (= markerId-gebunden) übertragen.
+    // Die segKey ist stabile Marker-ID + Wiederholungsindex, unabhängig von der
+    // Position im Arrangement. Dadurch folgt der Inhalt immer dem zugehörigen Marker.
+    const oldKeyToLines = new Map();
+    for(const oldSeg of arrangementSegments){
+      oldKeyToLines.set(oldSeg.segKey, lyrics.slice(oldSeg.lineStartIdx, oldSeg.lineStartIdx + oldSeg.lineCount));
+    }
+    for(const newSeg of segs){
+      const oldLines = oldKeyToLines.get(newSeg.segKey) || [];
+      for(let j = 0; j < Math.min(newSeg.lineCount, oldLines.length); j++){
+        newLyrics[newSeg.lineStartIdx + j] = oldLines[j] || '';
+      }
+    }
+  } else {
+    // Erstmaliger Wechsel in den Arrangement-Modus:
+    // Inhalte aus dem bisherigen zeitbasierten Layout einmalig übernehmen.
+    for(const seg of segs){
+      for(let lOff = 0; lOff < seg.lineCount; lOff++){
+        const newIdx     = seg.lineStartIdx + lOff;
+        const audioTime  = seg.audioStart + lOff * 2 * bl;
+        const oldBarIdx  = Math.floor((audioTime + timeTol()) / bl);
+        const oldLineIdx = Math.floor(oldBarIdx / 2);
+        if(oldLineIdx >= 0 && oldLineIdx < lyrics.length && lyrics[oldLineIdx]){
+          newLyrics[newIdx] = lyrics[oldLineIdx];
+        }
+      }
+      // Klone erhalten zunächst leere Zeilen (eigener, unabhängiger Inhalt)
+    }
+  }
+
+  lyrics             = newLyrics;
+  arrangementSegments = segs;
+  arrangementEditorMode = true;
+  perSegmentLineNumbering = true;
+  try{ if(importMarkersBtn) importMarkersBtn.classList.add('active'); }catch(_){}
+  renderLyricsList();
+}
+
+// ===== Ende Custom-Arrangement-Editor-Funktionen =====
+
 function encodeWavFromBuffer(buf){
   const numCh = buf.numberOfChannels|0;
   const sr = buf.sampleRate|0;
@@ -3001,33 +3422,19 @@ if(exportWavBtn){ exportWavBtn.addEventListener('click', exportArrangementWav); 
       fileInput.value=''; fileInfo.textContent='–'; duration=0; audioBuffer=null; viewStart=0; viewDur=0;
       markers=[]; cursorTime=0; renderMarkerList(); draw();
       // Editor zurücksetzen
-      lyrics = []; markerHeaders=[]; lastActiveLine = -1; renderLyricsList();
+      lyrics = []; markerHeaders=[]; lastActiveLine = -1;
+      arrangementEditorMode = false; arrangementSegments = [];
+      _arrangementRestoreData = null; orphanedLines = [];
+      try{ if(importMarkersBtn) importMarkersBtn.classList.remove('active'); }catch(_){}
+      renderLyricsList();
     });
-// --- Zusatz: Marker übernehmen & Autoscroll ---
-    if(importMarkersBtn){ importMarkersBtn.addEventListener('click', ()=>{
-        perSegmentLineNumbering = !perSegmentLineNumbering;
-        if(perSegmentLineNumbering){
-          const bl = barLen();
-          if(!isFinite(bl) || bl<=0){ alert('Bitte BPM einstellen, damit Takte berechnet werden können.'); perSegmentLineNumbering=false; return; }
-          const headers = [];
-          (markers||[])
-            .filter(m=> (m.label||'').trim().length>0 && m.playlistClone !== true)
-            .forEach(m=>{
-              const barNumber = Math.floor((m.time + timeTol()) / bl) + 1; // 1-basiert
-              const lineIdx = Math.floor((barNumber - 1) / 2) + 1;    // 2 Takte pro Zeile, 1-basiert
-              headers.push({ lineIdx, label: m.label.trim(), bar: barNumber });
-            });
-          headers.sort((a,b)=> a.lineIdx - b.lineIdx || a.bar - b.bar);
-          markerHeaders = headers;
-          importMarkersBtn.classList.add('active');
-          importMarkersBtn.textContent = 'Marker übernommen';
-        } else {
-          markerHeaders = [];
-          importMarkersBtn.classList.remove('active');
-          importMarkersBtn.textContent = 'Marker übernehmen';
-        }
-        renderLyricsList();
-      }); }
+// --- Custom Arrangement übernehmen ---
+    if(importMarkersBtn){
+      importMarkersBtn.addEventListener('click', ()=>{
+        applyArrangementToEditor();
+      });
+    }
+// --- Autoscroll ---
 
     if(toggleAutoscrollBtn){
       toggleAutoscrollBtn.addEventListener('click', ()=>{
@@ -3393,6 +3800,8 @@ document.addEventListener('click', async (e) => {
         const t = (typeof getPlayheadTime === 'function') ? getPlayheadTime() : 0;
         if (!seqCurrentStartId) seqCurrentStartId = findChronoSegmentStartIdAt(t);
         const segEnd = segmentEndTimeForStartId(seqCurrentStartId);
+        // Aktuellen Arrangement-Zustand für updateLyricsHighlight bereitstellen
+        try { window.__seqMonitorState = { id: seqCurrentStartId, repsLeft: (typeof __seqRepsLeft !== 'undefined' ? __seqRepsLeft : null) }; } catch(_) {}
         
 
         

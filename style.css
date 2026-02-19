@@ -598,6 +598,49 @@ body {
   border-radius: 12px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .4px; opacity: .9;
 }
+.segmentHeader.clone {
+  color: #c8a0f8;
+  border-color: #4a3060;
+  background: #1e1828;
+}
+.segmentHeader.muted {
+  opacity: .45;
+  filter: grayscale(60%);
+}
+.lyricsRow.muted {
+  opacity: .45;
+  background: #181818;
+  border-color: #252525;
+  filter: brightness(.8) grayscale(40%);
+}
+.segmentHeader.orphaned-header {
+  color: #6b6b6b;
+  border-color: #2e2e2e;
+  background: #181818;
+  opacity: .75;
+  margin-top: 28px;
+}
+.segmentHeader.orphaned-subheader {
+  margin-top: 6px;
+  opacity: .65;
+}
+.lyricsRow.orphaned {
+  opacity: .5;
+  background: #181818;
+  border-color: #252525;
+  filter: brightness(.85);
+}
+.lyricsRow.orphaned .orphaned-del {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  color: #ef4444;
+  padding: 0;
+  flex-shrink: 0;
+  border-color: #3d1a1a;
+  background: #1c1010;
+}
 
 /* Editor-Schrift: Bookman Demi */
 .page.right .lyricsRow .line {
