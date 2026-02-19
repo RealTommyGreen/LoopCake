@@ -762,6 +762,17 @@ updateTempoUI();
     let panStartX=0, panStartViewStart=0;
     let pinchStartDist = 0, pinchCenterTime = 0, pinchStartViewDur = 0;
 
+    // Peak-Cache für performante Waveform-Darstellung
+    let peakCache = null, peakCacheBuffer = null;
+
+    // RAF-Batching für draw()
+    let _drawPending = false;
+
+    // Inertia / Momentum-Pan
+    let _panVelocity = 0;  // Sekunden/Sekunde
+    let _panLastX = 0, _panLastT = 0;
+    let _inertiaId = null;
+
     
     // NEU: Tap-to-seek
     let tapCandidate = false;   // echter Tap ohne nennenswerte Bewegung?
@@ -1675,6 +1686,24 @@ function updateLyricsHighlight(t){
       if(lineIdx !== lastActiveLine) setActiveLine(lineIdx);
     }
 
+    // --- Peak-Cache aufbauen (einmalig nach Audio-Load) ---
+    function buildPeakCache(){
+      if(!audioBuffer){ peakCache=null; peakCacheBuffer=null; return; }
+      const ch = audioBuffer.getChannelData(0);
+      const BIN = 256; // Samples pro Bin
+      const count = Math.ceil(ch.length / BIN);
+      const mins = new Float32Array(count);
+      const maxs = new Float32Array(count);
+      for(let i=0; i<count; i++){
+        let mn=1, mx=-1;
+        const s0=i*BIN, s1=Math.min(s0+BIN, ch.length);
+        for(let j=s0; j<s1; j++){ const v=ch[j]; if(v<mn) mn=v; if(v>mx) mx=v; }
+        mins[i]=mn; maxs[i]=mx;
+      }
+      peakCache = { mins, maxs, binSize: BIN, count };
+      peakCacheBuffer = audioBuffer;
+    }
+
     // --- Zeichnen ---
     function pickTimeStep(viewSpan){
       const steps=[0.1,0.2,0.5,1,2,5,10,15,30,60,120,300,600,900,1800,3600,7200];
@@ -1685,8 +1714,14 @@ function updateLyricsHighlight(t){
     function draw(){
       const dpr = window.devicePixelRatio||1;
       const cssW = wave.clientWidth || 340, cssH = 240;
-      wave.width = Math.floor(cssW*dpr); wave.height = Math.floor(cssH*dpr);
+      // Canvas nur neu dimensionieren wenn sich die Größe wirklich geändert hat
+      const targetW = Math.floor(cssW*dpr), targetH = Math.floor(cssH*dpr);
+      if(wave.width !== targetW || wave.height !== targetH){
+        wave.width = targetW; wave.height = targetH;
+      }
       const ctx = wave.getContext('2d');
+      // Peak-Cache aktuell halten
+      if(audioBuffer !== peakCacheBuffer) buildPeakCache();
 
     // Trim Buttons
     const trimFrontBtn = document.getElementById('trimFront');
@@ -1736,15 +1771,12 @@ function updateLyricsHighlight(t){
       }catch(e){ /* noop */ }
 
 
-      // Waveform
-      if(audioBuffer){
-        const ch = audioBuffer.getChannelData(0);
+      // Waveform (aus Peak-Cache – O(cssW) statt O(samplesVisible))
+      if(audioBuffer && peakCache){
         sampleRate = audioBuffer.sampleRate || sampleRate;
-        const startSample = Math.floor(Math.max(0, viewStart) * sampleRate);
-        const endSample = Math.min(ch.length, Math.ceil(viewEnd() * sampleRate));
-        const samplesVisible = Math.max(1, endSample - startSample);
-        const sppx = Math.max(1, Math.floor(samplesVisible / cssW));
-        // Waveform – two-pass: dim body + bright core
+        const startSample = Math.max(0, viewStart) * sampleRate;
+        const endSample   = Math.min(audioBuffer.length, viewEnd() * sampleRate);
+        const { mins, maxs, binSize, count } = peakCache;
         const waveGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
         waveGrad.addColorStop(0,   'rgba(91,159,255,0.55)');
         waveGrad.addColorStop(0.35,'rgba(80,140,240,0.75)');
@@ -1754,14 +1786,20 @@ function updateLyricsHighlight(t){
         ctx.strokeStyle = waveGrad;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for(let x=0;x<cssW;x++){
-          const s0 = startSample + x * sppx;
-          let min = 1, max = -1;
-          for(let i=0;i<sppx && (s0+i)<endSample;i++){
-            const v = ch[s0+i]||0; if(v<min) min=v; if(v>max) max=v;
+        const samplesPerPx = (endSample - startSample) / cssW;
+        for(let x=0; x<cssW; x++){
+          const s0 = startSample + x * samplesPerPx;
+          const s1 = s0 + samplesPerPx;
+          const b0 = Math.max(0, Math.floor(s0 / binSize));
+          const b1 = Math.min(count, Math.ceil(s1 / binSize));
+          let mn=1, mx=-1;
+          for(let b=b0; b<b1; b++){
+            if(mins[b]<mn) mn=mins[b];
+            if(maxs[b]>mx) mx=maxs[b];
           }
-          ctx.moveTo(x, mid + min*(waveHeight/2-10));
-          ctx.lineTo(x, mid + max*(waveHeight/2-10));
+          if(mn>mx){ mn=0; mx=0; } // Randfall
+          ctx.moveTo(x, mid + mn*(waveHeight/2-10));
+          ctx.lineTo(x, mid + mx*(waveHeight/2-10));
         }
         ctx.stroke();
         ctx.lineWidth = 1;
@@ -1925,6 +1963,33 @@ function updateLyricsHighlight(t){
       updateMarkerRowHighlight(cursorTime);
     }
 
+    // --- RAF-gebatched draw (verhindert mehrfache Renders pro Frame) ---
+    function scheduleDraw(){
+      if(_drawPending) return;
+      _drawPending = true;
+      requestAnimationFrame(()=>{ _drawPending=false; draw(); });
+    }
+
+    // --- Inertia / Momentum-Pan ---
+    function _stopInertia(){ if(_inertiaId){ cancelAnimationFrame(_inertiaId); _inertiaId=null; } }
+    function _startInertia(){
+      _stopInertia();
+      if(Math.abs(_panVelocity) < 0.001) return;
+      let lastT = performance.now();
+      function step(now){
+        const dt = Math.min((now - lastT) / 1000, 0.05);
+        lastT = now;
+        _panVelocity *= Math.pow(0.88, dt * 60); // Dämpfung
+        if(Math.abs(_panVelocity) < 0.0005){ _inertiaId=null; return; }
+        const newStart = clamp(viewStart + _panVelocity * dt, 0, Math.max(0, duration - viewDur));
+        if(newStart === viewStart){ _inertiaId=null; return; }
+        setView(newStart, viewDur);
+        draw();
+        _inertiaId = requestAnimationFrame(step);
+      }
+      _inertiaId = requestAnimationFrame(step);
+    }
+
     // --- Cursor setzen (Snap bleibt) ---
     function setCursor(t, snapIt=true){
       const step = gridStep();
@@ -1966,6 +2031,7 @@ function updateLyricsHighlight(t){
         pinchStartDist=Math.hypot(dx,dy); pinchStartViewDur=viewDur;
         const midX=(pts[0].x+pts[1].x)/2-rect.left; pinchCenterTime=xToTime(midX,rect.width);
         draggingCursor=false; draggingPan=false; clearTimeout(longTimer); longTimer=null; draggingMarkerId=null;
+        _stopInertia();
         return;
       }
 
@@ -2023,6 +2089,7 @@ function updateLyricsHighlight(t){
 
       draggingPan=true; draggingCursor=false; clearTimeout(longTimer); longTimer=null; draggingMarkerId=null;
       panStartX=ev.clientX; panStartViewStart=viewStart;
+      _stopInertia(); _panVelocity=0; _panLastX=ev.clientX; _panLastT=performance.now();
     });
 
     wave.addEventListener('pointermove', (ev)=>{
@@ -2036,13 +2103,21 @@ function updateLyricsHighlight(t){
           const t=xToTime(x,rect.width);
           setCursor(t,true);
           if(usingEngine) restartEngineAt(cursorTime);
-          draw();
+          scheduleDraw();
         } else if(draggingPan){
           const dx=ev.clientX-panStartX;
           const dt=(dx/rect.width)*viewDur;
           const newStart=clamp(panStartViewStart - dt, 0, Math.max(0, duration - viewDur));
+          // Velocity für Inertia messen
+          const now=performance.now();
+          const elapsed=(now-_panLastT)/1000;
+          if(elapsed>0.005){
+            const dxV=ev.clientX-_panLastX;
+            _panVelocity = -((dxV/rect.width)*viewDur) / elapsed;
+            _panLastX=ev.clientX; _panLastT=now;
+          }
           setView(newStart, viewDur);
-          draw();
+          scheduleDraw();
         }
       } else if(activePointers.size===2){
         const pts=[...activePointers.values()];
@@ -2053,7 +2128,7 @@ function updateLyricsHighlight(t){
         const midX=(pts[0].x+pts[1].x)/2-rect.left;
         const newStart=clamp(pinchCenterTime - (midX/rect.width)*newDur, 0, Math.max(0, (duration||0) - newDur));
         setView(newStart, newDur);
-        draw();
+        scheduleDraw();
       }
     });
 
@@ -2077,8 +2152,9 @@ function updateLyricsHighlight(t){
 
       if(activePointers.size===0){
         if(draggingCursor){ setCursor(cursorTime, true); }
+        const wasPan = draggingPan;
         draggingCursor=false; draggingPan=false; draggingMarkerId=null; pinchStartDist=0;
-        draw();
+        if(wasPan){ _startInertia(); } else { draw(); }
       }
       wave.releasePointerCapture?.(ev.pointerId);
     }
@@ -2096,7 +2172,7 @@ function updateLyricsHighlight(t){
       const factor=Math.exp(-ev.deltaY*0.0015);
       const targetDur=clamp(viewDur * (1/factor), Math.min(gridStep()/4, duration||1), duration||1);
       const newStart=clamp(anchorTime - targetDur*((mouseX/rect.width)), 0, Math.max(0, duration - targetDur));
-      setView(newStart, targetDur); draw();
+      setView(newStart, targetDur); scheduleDraw();
     }, { passive:false });
 
     
