@@ -580,7 +580,13 @@ updateTempoUI();
               // Rebuild text rows but keep existing content
               rebuildLyrics({ preserve: true });
               draw();
-              if (usingEngine) resumeWithUpdatedLoopPreservingPhase();
+              // Do NOT restart the engine here – marker times and the audio buffer
+              // are unaffected by a BPM change, so restarting would only cause a
+              // click/pop in the audio. Just refresh visuals while playback runs.
+              if (!usingEngine) {
+                updateLyricsHighlight(cursorTime);
+                updateMarkerRowHighlight(cursorTime);
+              }
             } catch(_){}
           }
         }
