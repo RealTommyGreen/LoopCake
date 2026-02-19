@@ -123,9 +123,11 @@ function pitchShiftSemitones(srcBuf, semitones, tempoFactor){
     const sr     = srcBuf.sampleRate;
     const srcCh  = Array.from({length: numCh}, (_, c) => new Float32Array(srcBuf.getChannelData(c)));
 
-    // WSOLA parameters – fixed hopOut guarantees 4× overlap regardless of pitch factor
-    const winSize      = 2048;
-    const hopOut       = 512;
+    // WSOLA parameters – winSize 4096 / hopOut 1024 keeps 4× overlap while
+    // providing better frequency resolution and less phase cancellation vs. 2048/512.
+    // Total compute stays the same (fewer frames, larger window).
+    const winSize      = 4096;
+    const hopOut       = 1024;
     const hopIn        = Math.max(1, Math.round(hopOut / combinedFactor));
     const searchRadius = Math.max(1, Math.floor(hopIn / 2));
 
@@ -149,17 +151,25 @@ function pitchShiftSemitones(srcBuf, semitones, tempoFactor){
       let bestCorr = -Infinity;
 
       if(outPos > 0){
-        // Correlate against the already-placed tail at outPos (what we committed so far)
-        const refStart = outPos - hopOut; // start of last grain in output
+        // Correlate against the already-placed tail at outPos (what we committed so far).
+        // 512 samples covers a full period even at ~85 Hz, preventing phase mismatches
+        // on bass content that caused the phasing/flanging artifact.
+        const refStart = outPos - hopOut;
         for(let s = searchFrom; s <= searchTo; s += 2){
-          let corr = 0;
-          const limit = Math.min(128, winSize, inLen - s);
+          let dot = 0, srcEnergy = 0;
+          const limit = Math.min(512, winSize, inLen - s);
           for(let k = 0; k < limit; k++){
             const oi = refStart + k;
             const ref = (oi >= 0 && oi < outLenOLA && wSum[oi] > 1e-9)
               ? outCh[0][oi] / wSum[oi] : 0;
-            corr += ref * (srcCh[0][s + k] || 0);
+            const sVal = srcCh[0][s + k] || 0;
+            dot       += ref * sVal;
+            srcEnergy += sVal * sVal;
           }
+          // Normalised cross-correlation: rank candidates by waveform-shape similarity
+          // rather than raw amplitude. An unnormalised dot product favours louder grains
+          // over better-aligned ones, which is the primary cause of phasing artefacts.
+          const corr = srcEnergy > 1e-9 ? dot / Math.sqrt(srcEnergy) : 0;
           if(corr > bestCorr){ bestCorr = corr; bestPos = s; }
         }
       }
@@ -183,7 +193,15 @@ function pitchShiftSemitones(srcBuf, semitones, tempoFactor){
       if(w > 1e-9) for(let ch = 0; ch < numCh; ch++) outCh[ch][i] /= w;
     }
 
-    // Resample stretched buffer back to original length (this is what shifts the pitch)
+    // Measure input RMS (channel 0) before resampling for loudness compensation
+    let inRms = 0;
+    for(let i = 0; i < inLen; i++) inRms += srcCh[0][i] * srcCh[0][i];
+    inRms = Math.sqrt(inRms / inLen);
+
+    // Resample with 4-point cubic Hermite interpolation.
+    // Linear interpolation (former) acts as a low-pass filter that attenuates
+    // high frequencies and reduces perceived loudness. Cubic interpolation
+    // preserves transients and high-frequency content with minimal extra cost.
     const ratio = outLenOLA / inLen;
     const outBuf = new AudioBuffer({ numberOfChannels: numCh, length: inLen, sampleRate: sr });
     for(let ch = 0; ch < numCh; ch++){
@@ -193,11 +211,31 @@ function pitchShiftSemitones(srcBuf, semitones, tempoFactor){
         const pos = i * ratio;
         const j   = pos | 0;
         const fr  = pos - j;
-        const v0  = src[j] || 0;
-        const v1  = (j + 1 < outLenOLA) ? (src[j + 1] || 0) : v0;
-        out[i] = v0 + (v1 - v0) * fr;
+        const y0  = src[Math.max(0, j - 1)];
+        const y1  = src[j];
+        const y2  = src[Math.min(outLenOLA - 1, j + 1)];
+        const y3  = src[Math.min(outLenOLA - 1, j + 2)];
+        const a   = -0.5*y0 + 1.5*y1 - 1.5*y2 + 0.5*y3;
+        const b   =      y0 - 2.5*y1 + 2.0*y2 - 0.5*y3;
+        const c   = -0.5*y0           + 0.5*y2;
+        out[i]    = ((a*fr + b)*fr + c)*fr + y1;
       }
     }
+
+    // RMS gain compensation: correct any energy loss introduced by the WSOLA
+    // grain-selection and overlap-add process so output matches input loudness.
+    let outRms = 0;
+    const outCh0 = outBuf.getChannelData(0);
+    for(let i = 0; i < inLen; i++) outRms += outCh0[i] * outCh0[i];
+    outRms = Math.sqrt(outRms / inLen);
+    if(outRms > 1e-9 && inRms > 1e-9){
+      const gain = Math.max(0.5, Math.min(2.0, inRms / outRms));
+      for(let ch = 0; ch < numCh; ch++){
+        const data = outBuf.getChannelData(ch);
+        for(let i = 0; i < inLen; i++) data[i] *= gain;
+      }
+    }
+
     return outBuf;
   }catch(err){
     console.warn('pitchShiftSemitones failed:', err);
@@ -221,7 +259,7 @@ function _getPitchWorker(){
       self.postMessage({jobId:jobId,channels:channels,outLen:inLen},channels.map(function(c){return c.buffer;}));
       return;
     }
-    var winSize=2048,hopOut=512;
+    var winSize=4096,hopOut=1024;
     var hopIn=Math.max(1,Math.round(hopOut/combinedFactor));
     var searchRadius=Math.max(1,Math.floor(hopIn/2));
     var hann=new Float32Array(winSize);
@@ -238,12 +276,14 @@ function _getPitchWorker(){
       if(outPos>0){
         var refStart=outPos-hopOut;
         for(var s=searchFrom;s<=searchTo;s+=2){
-          var corr=0,limit=Math.min(128,winSize,inLen-s);
+          var dot=0,srcEnergy=0,limit=Math.min(512,winSize,inLen-s);
           for(var k=0;k<limit;k++){
             var oi=refStart+k;
             var ref=(oi>=0&&oi<outLenOLA&&wSum[oi]>1e-9)?outCh[0][oi]/wSum[oi]:0;
-            corr+=ref*(channels[0][s+k]||0);
+            var sVal=channels[0][s+k]||0;
+            dot+=ref*sVal;srcEnergy+=sVal*sVal;
           }
+          var corr=srcEnergy>1e-9?dot/Math.sqrt(srcEnergy):0;
           if(corr>bestCorr){bestCorr=corr;bestPos=s;}
         }
       }
@@ -260,15 +300,29 @@ function _getPitchWorker(){
       var w=wSum[i];
       if(w>1e-9) for(var ch=0;ch<numCh;ch++) outCh[ch][i]/=w;
     }
+    var inRms=0;
+    for(var i=0;i<inLen;i++) inRms+=channels[0][i]*channels[0][i];
+    inRms=Math.sqrt(inRms/inLen);
     var ratio=outLenOLA/inLen,result=[];
     for(var ch=0;ch<numCh;ch++){
       var out=new Float32Array(inLen),src=outCh[ch];
       for(var i=0;i<inLen;i++){
         var pos=i*ratio,j=pos|0,fr=pos-j;
-        var v0=src[j]||0,v1=j+1<outLenOLA?(src[j+1]||0):v0;
-        out[i]=v0+(v1-v0)*fr;
+        var y0=src[Math.max(0,j-1)],y1=src[j];
+        var y2=src[Math.min(outLenOLA-1,j+1)],y3=src[Math.min(outLenOLA-1,j+2)];
+        var a=-0.5*y0+1.5*y1-1.5*y2+0.5*y3;
+        var b=y0-2.5*y1+2.0*y2-0.5*y3;
+        var c=-0.5*y0+0.5*y2;
+        out[i]=((a*fr+b)*fr+c)*fr+y1;
       }
       result.push(out);
+    }
+    var outRms=0;
+    for(var i=0;i<inLen;i++) outRms+=result[0][i]*result[0][i];
+    outRms=Math.sqrt(outRms/inLen);
+    if(outRms>1e-9&&inRms>1e-9){
+      var gain=Math.max(0.5,Math.min(2.0,inRms/outRms));
+      for(var ch=0;ch<numCh;ch++) for(var i=0;i<inLen;i++) result[ch][i]*=gain;
     }
     self.postMessage({jobId:jobId,channels:result,outLen:inLen},result.map(function(c){return c.buffer;}));
   }catch(err){
@@ -2422,19 +2476,26 @@ row.appendChild(handle);
           const now = performance.now();
           if(now - last < DOUBLE_MS){
             clearTimeout(clearTok); last = 0;
-            let target = 0;
             if(playSeqOrder){
-              const ls = markers.slice()
-                .sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0))
-                .filter(m => m.pin !== 'end');
-              if(ls.length > 0) target = ls[0].time || 0;
+              // __jumpToLoopStart sets both the cursor AND seqCurrentStartId correctly.
+              // The old inline code only set the cursor, leaving seqCurrentStartId stale.
+              try{ if(typeof __jumpToLoopStart === 'function') __jumpToLoopStart(); }catch(_){}
+              // Clear any stale tap-highlight: if the user had previously tapped a marker,
+              // _seqTapHlId would still be set. The startEngineAt wrapper preferentially uses
+              // _seqTapHlId over the cursor position, so without clearing it Play would jump
+              // to the old tapped marker instead of the first arrangement position.
+              try{
+                window._seqTapHlId = null;
+                document.querySelectorAll('.seq-tap-hl').forEach(r => r.classList.remove('seq-tap-hl'));
+              }catch(_){}
             } else {
+              let target = 0;
               const act = getActiveMarkersSorted();
               if(Array.isArray(act) && act.length === 2)
                 target = Math.min(act[0].time, act[1].time);
+              setCursor(target, true);
+              draw();
             }
-            setCursor(target, true);
-            draw();
             return;
           }
           last = now;
@@ -2770,12 +2831,28 @@ async function exportArrangementWav(){
     if(exportStatus){ exportStatus.style.display = 'block'; exportStatus.textContent = 'Bereite Export vor…'; }
     if(exportWavBtn){ exportWavBtn.disabled = true; exportWavBtn.textContent = 'Exportiere…'; }
 
-    // Source buffer (respect pitch)
+    // If the async pitch/tempo worker is still running, wait for it to finish
+    // before reading getPlaybackBuffer() – otherwise we'd get the unshifted fallback.
+    if(typeof _pitchPending !== 'undefined' && _pitchPending){
+      if(exportStatus) exportStatus.textContent = 'Warte auf Pitch/Tempo-Verarbeitung…';
+      await new Promise(resolve => {
+        const poll = () => { if(!_pitchPending) resolve(); else requestAnimationFrame(poll); };
+        requestAnimationFrame(poll);
+      });
+    }
+
+    // Source buffer: honours both pitch shift and tempo shift.
+    // pitchedBuffer is designed for playback at playbackRate = tf.
+    // Since a WAV file always plays at 1.0×, we must resample afterwards
+    // (see "tempo resampling" step below) to bake tf into the file.
+    const tf = (typeof getPlaybackRate === 'function') ? getPlaybackRate() : 1;
+    const applyTempo = Math.abs(tf - 1) > 1e-4;
     const srcBuf = (typeof getPlaybackBuffer === 'function' ? (getPlaybackBuffer() || audioBuffer) : audioBuffer);
     const sr = srcBuf.sampleRate|0;
     const numCh = srcBuf.numberOfChannels|0;
 
-    // Build segments
+    // Build segments (positions are in pitchedBuffer sample-space, which maps
+    // 1-to-1 with the original because WSOLA preserves temporal position).
     const segs = buildArrangementSegmentsSR(sr);
     if(!segs.length){
       if(exportStatus){ exportStatus.textContent = 'Kein Inhalt im Custom Arrangement.'; }
@@ -2783,18 +2860,20 @@ async function exportArrangementWav(){
       return;
     }
 
-    // Total length
+    // Total length in pitchedBuffer samples
     let total = 0;
     for(const seg of segs){ total += Math.max(0, (seg.e|0) - (seg.s|0)); }
-    const outBuf = (typeof createNewBuffer === 'function') ? createNewBuffer(numCh, total, sr) : null;
+    const outBuf = createNewBuffer(numCh, total, sr);
     if(!outBuf){ alert('Konnte Zielpuffer nicht erstellen.'); if(exportStatus){ exportStatus.style.display='none'; } if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent='Arrangement als WAV exportieren'; } return; }
 
-    // Copy with progress (chunked)
-    const CHUNK = 262144; // samples per chunk
+    // Copy segments with progress (chunked to keep UI responsive)
+    const CHUNK = 262144;
     const srcCh = Array.from({length:numCh}, (_,c)=> srcBuf.getChannelData(c));
     const dstCh = Array.from({length:numCh}, (_,c)=> outBuf.getChannelData(c));
     let dstPos = 0;
     let done = 0;
+    // Weight copy phase as 70 % of progress bar, resample as 30 % (if active)
+    const copyWeight = applyTempo ? 0.7 : 1.0;
 
     for(let idx=0; idx<segs.length; idx++){
       const {s, e} = segs[idx];
@@ -2809,17 +2888,60 @@ async function exportArrangementWav(){
         dstPos += n;
         done += n;
 
-        // UI progress
         if((done & 0xFFFF) === 0){
-          const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+          const pct = Math.round((done / total) * 100 * copyWeight);
           if(exportStatus){ exportStatus.textContent = `Export … ${pct}%`; }
           await new Promise(requestAnimationFrame);
         }
       }
     }
 
+    // ── Tempo resampling ──────────────────────────────────────────────────────
+    // pitchedBuffer is meant to be played at playbackRate = tf.
+    // A WAV plays at 1.0×, so:
+    //   • without correction: tempo sounds at 1× (not tf), pitch = pitchFactor/tf
+    //   • after resampling from `total` → `round(total/tf)` samples:
+    //       tempo = tf (shorter/longer file), pitch = pitchFactor ✓
+    // We use 4-point cubic Hermite interpolation to preserve audio quality.
+    let finalBuf = outBuf;
+    if(applyTempo){
+      if(exportStatus){ exportStatus.textContent = 'Tempo einrechnen…'; }
+      await new Promise(requestAnimationFrame);
+
+      const exportLen = Math.max(1, Math.round(total / tf));
+      const resampledBuf = createNewBuffer(numCh, exportLen, sr);
+      if(!resampledBuf){ throw new Error('Konnte Resample-Puffer nicht erstellen.'); }
+
+      const ratio = total / exportLen; // > 1 for faster tempo, < 1 for slower
+      for(let ch = 0; ch < numCh; ch++){
+        const inp = outBuf.getChannelData(ch);
+        const out2 = resampledBuf.getChannelData(ch);
+        for(let i = 0; i < exportLen; i++){
+          const pos = i * ratio;
+          const j   = pos | 0;
+          const fr  = pos - j;
+          const y0  = inp[Math.max(0, j - 1)];
+          const y1  = inp[j] || 0;
+          const y2  = inp[Math.min(total - 1, j + 1)];
+          const y3  = inp[Math.min(total - 1, j + 2)];
+          const a   = -0.5*y0 + 1.5*y1 - 1.5*y2 + 0.5*y3;
+          const b   =      y0 - 2.5*y1 + 2.0*y2 - 0.5*y3;
+          const c   = -0.5*y0           + 0.5*y2;
+          out2[i]   = ((a*fr + b)*fr + c)*fr + y1;
+
+          if((i & 0x3FFFF) === 0){
+            const pct = Math.round(70 + (i / exportLen) * 30);
+            if(exportStatus){ exportStatus.textContent = `Export … ${pct}%`; }
+          }
+        }
+      }
+      finalBuf = resampledBuf;
+      await new Promise(requestAnimationFrame);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if(exportStatus){ exportStatus.textContent = 'WAV erstellen…'; }
-    const blob = encodeWavFromBuffer(outBuf);
+    const blob = encodeWavFromBuffer(finalBuf);
     
     // Android bridge save if available
 
