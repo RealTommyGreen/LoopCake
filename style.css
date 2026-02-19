@@ -16,6 +16,13 @@
 
 /* ---------- Base ---------- */
 * { box-sizing: border-box; }
+
+/* Suppress browser default focus outline on mouse/touch click;
+   keep a styled outline for keyboard navigation (accessibility).
+   Works across Chrome, Firefox, Safari, Edge. */
+:focus          { outline: none; }
+:focus-visible  { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 html, body { height: 100%; background: var(--bg); color: var(--text); }
 body {
   margin: 0; padding: 0;
