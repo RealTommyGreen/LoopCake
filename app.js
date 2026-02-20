@@ -1506,7 +1506,7 @@ idx.addEventListener('pointercancel', ()=>{
       if(arrangementEditorMode && Array.isArray(orphanedLines) && orphanedLines.length > 0){
         const orphanSep = document.createElement('div');
         orphanSep.className = 'segmentHeader orphaned-header';
-        orphanSep.textContent = '— Gelöschte Spuren (Zeilen behalten) —';
+        orphanSep.textContent = '— Gelöschte Spuren —';
         lyricsListEl.appendChild(orphanSep);
 
         orphanedLines.forEach((group, groupIdx) => {
@@ -2581,7 +2581,7 @@ ensureDefaultStartEndMarkers();
   markerListEl.innerHTML = "";
   ensureListOrder();
   if(markers.length===0){
-    markerListEl.innerHTML = '<div style="color:#9e9e9e;">Noch keine Marker.</div>';
+    markerListEl.innerHTML = '<div style="color:#9e9e9e;">Es wurden noch keine Marker erstellt</div>';
     return;
   }
   const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
