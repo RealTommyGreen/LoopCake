@@ -1,5 +1,68 @@
 /* ===== app.js – Extracted from Loop.html ===== */
 
+/* ========== i18n System ========== */
+var _translations = {};
+var _lang = (function(){ try{ return localStorage.getItem('lc_lang') || 'de'; }catch(_){ return 'de'; } })();
+
+function _t(key) {
+  return (_translations[key] !== undefined) ? _translations[key] : key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var val = _t(el.getAttribute('data-i18n'));
+    if (val !== el.getAttribute('data-i18n')) el.textContent = val;
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(function(el) {
+    var val = _t(el.getAttribute('data-i18n-html'));
+    if (val !== el.getAttribute('data-i18n-html')) el.innerHTML = val;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function(el) {
+    var val = _t(el.getAttribute('data-i18n-title'));
+    if (val !== el.getAttribute('data-i18n-title')) el.title = val;
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach(function(el) {
+    var val = _t(el.getAttribute('data-i18n-aria'));
+    if (val !== el.getAttribute('data-i18n-aria')) el.setAttribute('aria-label', val);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+    var val = _t(el.getAttribute('data-i18n-placeholder'));
+    if (val !== el.getAttribute('data-i18n-placeholder')) el.placeholder = val;
+  });
+  // Update html lang attribute
+  document.documentElement.lang = _lang;
+  // Update lang selector to reflect current language
+  var sel = document.getElementById('langSelect');
+  if (sel) sel.value = _lang;
+}
+
+function loadLanguage(lang) {
+  _lang = lang;
+  try { localStorage.setItem('lc_lang', lang); } catch(_) {}
+  // Both translation files are pre-loaded via <script defer> in <head>
+  // so window._i18n_* is always available synchronously when app.js runs.
+  var data = window['_i18n_' + lang];
+  if (data) {
+    _translations = data;
+    applyTranslations();
+  } else {
+    console.warn('i18n: window._i18n_' + lang + ' not found – check <head> script tags');
+  }
+}
+
+// Bootstrap: load saved language on startup
+loadLanguage(_lang);
+
+// Language selector handler (runs after DOM ready since app.js is defer)
+(function() {
+  var sel = document.getElementById('langSelect');
+  if (!sel) return;
+  sel.value = _lang;
+  sel.addEventListener('change', function() {
+    loadLanguage(sel.value);
+  });
+})();
+
 /* ---------- WebAudio: einmalige Normalisierung (inkl. Safari-Fallback) ---------- */
 window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
@@ -87,6 +150,8 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
       book.classList.remove('flipped');
       navEditor.classList.remove('active');
       navPlayer.classList.add('active');
+      // Immediately redraw the waveform (pump was skipping draw() while editor was visible)
+      try { draw(); } catch(_) {}
     }
     navPlayer.addEventListener('click', showLeft);
     navEditor.addEventListener('click', showRight);
@@ -138,7 +203,7 @@ function updateGridSnapUI(){
     gridSnapBtn.classList.toggle('active', !!snapEnabled);
     gridSnapBtn.setAttribute('aria-pressed', String(!!snapEnabled));
     gridSnapBtn.textContent = 'Grid Snap'; // Label bleibt gleich; Status über Highlight
-    gridSnapBtn.title = snapEnabled ? 'Cursor am Raster einrasten (AN)' : 'Cursor am Raster einrasten (AUS)';
+    gridSnapBtn.title = _t(snapEnabled ? 'btn_grid_snap_on' : 'btn_grid_snap_off');
   }catch(_){}
 }
 gridSnapBtn?.addEventListener('click', (e)=>{
@@ -401,7 +466,7 @@ function _showPitchLoadingUI(on){
   try{ if(typeof tempoPlusBtn !=='undefined'&&tempoPlusBtn)  tempoPlusBtn.disabled  = on; }catch(_){}
   try{
     if(on){
-      if(pitchValEl) pitchValEl.textContent = 'Lade';
+      if(pitchValEl) pitchValEl.textContent = _t('js_loading');
       if(typeof tempoValEl!=='undefined'&&tempoValEl) tempoValEl.value = 'Lade';
     } else {
       updatePitchUI();
@@ -1249,9 +1314,14 @@ function getLoopRegion(){
         const t = getPlayheadTime();
         cursorTime = t;
         curLabel.textContent = formatTime(t);
-        draw();
-        updateLyricsHighlight(t);
-        updateMarkerRowHighlight(t);
+        if(book.classList.contains('flipped')){
+          // Editor visible: update lyrics highlight only, skip expensive canvas draw
+          updateLyricsHighlight(t);
+        } else {
+          // Player visible: draw waveform + marker list, skip lyrics work
+          draw();
+          updateMarkerRowHighlight(t);
+        }
         rafId = requestAnimationFrame(pump);
       };
       rafId = requestAnimationFrame(pump);
@@ -1305,7 +1375,7 @@ function getLoopRegion(){
 }
 
   function startEngineAt(offset){
-  if(!audioBuffer) return alert('Bitte zuerst eine Audiodatei laden.');
+  if(!audioBuffer) return alert(_t('js_no_audio'));
   ensureAC();
 
   if(engineSource){ try{engineSource.stop();}catch(_){} try{engineSource.disconnect();}catch(_){} }
@@ -1384,7 +1454,7 @@ function getLoopRegion(){
 
         function renderLyricsList(){
       const { bars, lines } = computeCounts();
-      if (linesInfoEl) linesInfoEl.textContent = `Takte: ${bars} • Zeilen: ${lines}`;
+      if (linesInfoEl) linesInfoEl.textContent = _t('js_bars_lines').replace('{bars}', bars).replace('{lines}', lines);
       lyricsListEl.innerHTML = '';
 
       // Map der Segment-Header pro Zeile (1-basiert)
@@ -1521,7 +1591,7 @@ idx.addEventListener('pointercancel', ()=>{
       if(arrangementEditorMode && Array.isArray(orphanedLines) && orphanedLines.length > 0){
         const orphanSep = document.createElement('div');
         orphanSep.className = 'segmentHeader orphaned-header';
-        orphanSep.textContent = '— Gelöschte Spuren —';
+        orphanSep.textContent = _t('js_orphan_sep');
         lyricsListEl.appendChild(orphanSep);
 
         orphanedLines.forEach((group, groupIdx) => {
@@ -1536,7 +1606,7 @@ idx.addEventListener('pointercancel', ()=>{
 
             const delBtn = document.createElement('button');
             delBtn.className = 'btn orphaned-del';
-            delBtn.title = 'Zeile löschen';
+            delBtn.title = _t('js_del_line_title');
             delBtn.textContent = '✕';
             delBtn.addEventListener('click', ()=>{
               group.lines.splice(lineJ, 1);
@@ -2089,7 +2159,7 @@ function updateLyricsHighlight(t){
         const isDouble=(lastTapId===m.id && tapTimer && (now - tapTimer.time) < 300);
         if(isDouble){
           clearTimeout(tapTimer.handle); tapTimer=null; lastTapId=null;
-          const name=prompt('Neuer Markername:', m.label||''); if(name!==null){ m.label=name; renderMarkerList(); draw(); }
+          const name=prompt(_t('js_rename_marker_prompt'), m.label||''); if(name!==null){ m.label=name; renderMarkerList(); draw(); }
         }else{
           tapTimer={ time:now, handle:setTimeout(()=>{
             m.active=!m.active; if(m.active) ensureMaxTwoActive(m);
@@ -2280,14 +2350,14 @@ function updateLyricsHighlight(t){
 
     saveProjectBtn?.addEventListener('click', ()=>{
       const defaultBase = (loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'projekt');
-      let name = prompt('Vergib einen Projektnamen und wähle danach den gewünschten Ordner', `${defaultBase}_session`);
+      let name = prompt(_t('js_prompt_project_name'), `${defaultBase}_session`);
       if(name===null) return;
       name = (name.trim() || 'projekt');
       if(!/\.json$/i.test(name)) name += '.json';
       const data = JSON.stringify(currentProject());
       if (window.Android && Android.saveProject) {
         try { Android.saveProject(data, name); }
-        catch(e){ alert('Konnte Android-Dateiauswahl nicht öffnen: '+e); }
+        catch(e){ alert(_t('js_err_android')+e); }
       } else {
         downloadJson(currentProject(), name);
       }
@@ -2388,7 +2458,7 @@ cursorTime = +json.cursorTime || 0;
         }catch(e){ /* noop */ }
 
 
-        alert('Lade nun die passende Audiodatei');}catch(err){ alert('Konnte Projekt nicht lesen: '+(err&&err.message?err.message:err)); }
+        alert(_t('js_load_matching_audio'));}catch(err){ alert(_t('js_err_project_load')+(err&&err.message?err.message:err)); }
       e.target.value='';
     });
 
@@ -2487,7 +2557,7 @@ ensureDefaultStartEndMarkers();
         // Spinner laufen lassen – sonst sofort ausblenden.
         try{ _triggerPitchTempoAsync(); }catch(_){}
         if(!_pitchPending) _showPitchLoadingUI(false);
-      }catch(err){ _showPitchLoadingUI(false); alert('Konnte Audiodatei nicht laden: '+(err&&err.message?err.message:err)); }
+      }catch(err){ _showPitchLoadingUI(false); alert(_t('js_err_audio_load')+(err&&err.message?err.message:err)); }
     });
 
     // --- Datei laden ---
@@ -2596,7 +2666,7 @@ ensureDefaultStartEndMarkers();
   markerListEl.innerHTML = "";
   ensureListOrder();
   if(markers.length===0){
-    markerListEl.innerHTML = '<div style="color:#9e9e9e;">Erstelle zuerst neue Marker!</div>';
+    markerListEl.innerHTML = '<div style="color:#9e9e9e;" data-i18n="js_no_markers">' + _t('js_no_markers') + '</div>';
     return;
   }
   const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));
@@ -2796,7 +2866,7 @@ ensureDefaultStartEndMarkers();
     handle.innerHTML = '<svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" fill="currentColor"><circle cx="3" cy="2.5" r="1.5"/><circle cx="7" cy="2.5" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13.5" r="1.5"/><circle cx="7" cy="13.5" r="1.5"/></svg>';
 
     const name = document.createElement('input');
-    name.className='field'; name.type='text'; name.value=m.label||''; name.placeholder='Markername';
+    name.className='field'; name.type='text'; name.value=m.label||''; name.placeholder=_t('js_marker_placeholder');
     name.addEventListener('change', ()=>{ m.label=name.value; draw(); });
 
     
@@ -2808,7 +2878,7 @@ ensureDefaultStartEndMarkers();
       badge.className = 'mono';
       badge.style.fontSize = '12px';
       badge.style.color = '#9e9e9e';
-      badge.textContent = 'Playlist‑Kopie';
+      badge.textContent = _t('js_playlist_copy');
       // wrap name + badge in a flex column
       const nameWrap = document.createElement('div');
       nameWrap.style.display = 'grid';
@@ -2828,7 +2898,7 @@ ensureDefaultStartEndMarkers();
     const dupBtn = document.createElement('button');
     dupBtn.className = 'btn';
     dupBtn.textContent = '+';
-    dupBtn.title = 'Playlist-Kopie unterhalb einfügen';
+    dupBtn.title = _t('js_dup_title');
     dupBtn.addEventListener('click', ()=>{
       try{
         // Basis für die Kopie: Originalmarker (wenn Kopie, dann dessen Original suchen)
@@ -2838,7 +2908,7 @@ ensureDefaultStartEndMarkers();
         const clone = {
           id: uid(),
           time: base.time,           // keine Auswirkung auf Waveform (wir blenden Kopien dort aus)
-          label: base.label + ' (Kopie)',
+          label: base.label + _t('js_copy_suffix'),
           active: false,
           playlistClone: true,
           playlistCloneOf: base.id
@@ -2861,7 +2931,7 @@ ensureDefaultStartEndMarkers();
     actionBtn.className = 'btn';
     if(m.playlistClone === true){
       actionBtn.textContent = '−';
-      actionBtn.title = 'Diese Playlist-Kopie entfernen';
+      actionBtn.title = _t('js_remove_copy_title');
       actionBtn.addEventListener('click', ()=>{
         try{
           if(arrangementEditorMode && arrangementSegments.length > 0){
@@ -2883,7 +2953,7 @@ ensureDefaultStartEndMarkers();
     }else{
       // ORIGINAL: Mute-Schalter
       actionBtn.textContent = (m.muted ? 'Unmute' : 'Mute');
-      actionBtn.title = 'Originalspur stummschalten (aus Reihenfolge ausklammern)';
+      actionBtn.title = _t('js_mute_track_title');
       actionBtn.addEventListener('click', ()=>{
         try{
           m.muted = !m.muted;
@@ -2905,7 +2975,7 @@ ensureDefaultStartEndMarkers();
     if (m.playlistClone === true) {
       const noteBtn = document.createElement('button');
       noteBtn.className = 'btn btn-sm';
-      noteBtn.title = 'Notiz zu dieser Kopie hinzufügen/anzeigen';
+      noteBtn.title = _t('js_note_title');
       noteBtn.setAttribute('aria-label','Notiz');
       noteBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z" stroke="#90caf9" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 3v4a2 2 0 0 0 2 2h4" stroke="#90caf9" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
@@ -2931,7 +3001,7 @@ ensureDefaultStartEndMarkers();
       const noteArea = document.createElement('textarea');
       noteArea.className = 'field';
       noteArea.rows = 2;
-      noteArea.placeholder = 'Notiz für diese Kopiespur …';
+      noteArea.placeholder = _t('js_note_placeholder');
       noteArea.value = (m.note || '');
       noteArea.addEventListener('input', ()=>{ m.note = noteArea.value; updateNoteIndicator(); });
 
@@ -2960,8 +3030,8 @@ row.appendChild(handle);
 }
 // --- Buttons ---
     addMarkerBtn.addEventListener('click', ()=>{
-  if(duration<=0) return alert('Bitte zuerst eine Audiodatei laden.');
-  const name = prompt('Name für den Marker:'); if(name===null) return;
+  if(duration<=0) return alert(_t('js_no_audio'));
+  const name = prompt(_t('js_marker_prompt')); if(name===null) return;
   const t = cursorTime;
   const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false, seqReps: 1 };
   insertMarkerAscending(newM);
@@ -3409,12 +3479,12 @@ function buildArrangementForEditor(){
 function applyArrangementToEditor(){
   const bl = barLen();
   if(!isFinite(bl) || bl <= 0){
-    alert('Bitte BPM einstellen, damit das Arrangement berechnet werden kann.');
+    alert(_t('js_no_bpm'));
     return;
   }
   const segs = buildArrangementForEditor();
   if(segs.length === 0){
-    alert('Keine verwertbaren Segmente im Custom Arrangement gefunden.');
+    alert(_t('js_no_segments'));
     return;
   }
 
@@ -3509,15 +3579,15 @@ function encodeWavFromBuffer(buf){
 }
 
 async function exportArrangementWav(){
-  if(!audioBuffer || !duration){ alert('Bitte zuerst eine Audiodatei laden.'); return; }
+  if(!audioBuffer || !duration){ alert(_t('js_no_audio')); return; }
   try{
-    if(exportStatus){ exportStatus.style.display = 'block'; exportStatus.textContent = 'Bereite Export vor…'; }
-    if(exportWavBtn){ exportWavBtn.disabled = true; exportWavBtn.textContent = 'Exportiere…'; }
+    if(exportStatus){ exportStatus.style.display = 'block'; exportStatus.textContent = _t('js_export_preparing'); }
+    if(exportWavBtn){ exportWavBtn.disabled = true; exportWavBtn.textContent = _t('js_export_exporting'); }
 
     // If the async pitch/tempo worker is still running, wait for it to finish
     // before reading getPlaybackBuffer() – otherwise we'd get the unshifted fallback.
     if(typeof _pitchPending !== 'undefined' && _pitchPending){
-      if(exportStatus) exportStatus.textContent = 'Warte auf Pitch/Tempo-Verarbeitung…';
+      if(exportStatus) exportStatus.textContent = _t('js_export_waiting');
       await new Promise(resolve => {
         const poll = () => { if(!_pitchPending) resolve(); else requestAnimationFrame(poll); };
         requestAnimationFrame(poll);
@@ -3538,8 +3608,8 @@ async function exportArrangementWav(){
     // 1-to-1 with the original because WSOLA preserves temporal position).
     const segs = buildArrangementSegmentsSR(sr);
     if(!segs.length){
-      if(exportStatus){ exportStatus.textContent = 'Kein Inhalt im Custom Arrangement.'; }
-      if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent='Arrangement als WAV exportieren'; }
+      if(exportStatus){ exportStatus.textContent = _t('js_export_no_content'); }
+      if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent=_t('js_export_btn_label'); }
       return;
     }
 
@@ -3547,7 +3617,7 @@ async function exportArrangementWav(){
     let total = 0;
     for(const seg of segs){ total += Math.max(0, (seg.e|0) - (seg.s|0)); }
     const outBuf = createNewBuffer(numCh, total, sr);
-    if(!outBuf){ alert('Konnte Zielpuffer nicht erstellen.'); if(exportStatus){ exportStatus.style.display='none'; } if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent='Arrangement als WAV exportieren'; } return; }
+    if(!outBuf){ alert(_t('js_export_err_buffer')); if(exportStatus){ exportStatus.style.display='none'; } if(exportWavBtn){ exportWavBtn.disabled=false; exportWavBtn.textContent=_t('js_export_btn_label'); } return; }
 
     // Copy segments with progress (chunked to keep UI responsive)
     const CHUNK = 262144;
@@ -3573,7 +3643,7 @@ async function exportArrangementWav(){
 
         if((done & 0xFFFF) === 0){
           const pct = Math.round((done / total) * 100 * copyWeight);
-          if(exportStatus){ exportStatus.textContent = `Export … ${pct}%`; }
+          if(exportStatus){ exportStatus.textContent = _t('js_export_progress').replace('{pct}', pct); }
           await new Promise(requestAnimationFrame);
         }
       }
@@ -3588,7 +3658,7 @@ async function exportArrangementWav(){
     // We use 4-point cubic Hermite interpolation to preserve audio quality.
     let finalBuf = outBuf;
     if(applyTempo){
-      if(exportStatus){ exportStatus.textContent = 'Tempo einrechnen…'; }
+      if(exportStatus){ exportStatus.textContent = _t('js_export_tempo'); }
       await new Promise(requestAnimationFrame);
 
       const exportLen = Math.max(1, Math.round(total / tf));
@@ -3614,7 +3684,7 @@ async function exportArrangementWav(){
 
           if((i & 0x3FFFF) === 0){
             const pct = Math.round(70 + (i / exportLen) * 30);
-            if(exportStatus){ exportStatus.textContent = `Export … ${pct}%`; }
+            if(exportStatus){ exportStatus.textContent = _t('js_export_progress').replace('{pct}', pct); }
           }
         }
       }
@@ -3623,7 +3693,7 @@ async function exportArrangementWav(){
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    if(exportStatus){ exportStatus.textContent = 'WAV erstellen…'; }
+    if(exportStatus){ exportStatus.textContent = _t('js_export_creating_wav'); }
     const blob = encodeWavFromBuffer(finalBuf);
     
     // Android bridge save if available
@@ -3632,7 +3702,7 @@ async function exportArrangementWav(){
     const filename = `${base}-arrangement.wav`;
     if (window.Android && Android.saveWavBase64) {
       try {
-        if(exportStatus){ exportStatus.textContent = 'Speichere…'; }
+        if(exportStatus){ exportStatus.textContent = _t('js_export_saving'); }
         const buf = await blob.arrayBuffer();
         let binary = '';
         const bytes = new Uint8Array(buf);
@@ -3640,7 +3710,7 @@ async function exportArrangementWav(){
         for(let i=0;i<bytes.length;i+=chunk){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk)); }
         const b64 = btoa(binary);
         Android.saveWavBase64(b64, filename);
-        if(exportStatus){ exportStatus.textContent = 'Fertig ✅'; }
+        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
       } catch(e) {
         console.warn('Android saveWavBase64 failed, falling back to download', e);
         const a = document.createElement('a');
@@ -3648,7 +3718,7 @@ async function exportArrangementWav(){
         a.href = URL.createObjectURL(blob);
         a.style.display = 'none'; document.body.appendChild(a); a.click();
         setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        if(exportStatus){ exportStatus.textContent = 'Fertig ✅'; }
+        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
       }
     } else {
         const a = document.createElement('a');
@@ -3656,15 +3726,15 @@ async function exportArrangementWav(){
         a.href = URL.createObjectURL(blob);
         a.style.display = 'none'; document.body.appendChild(a); a.click();
         setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        if(exportStatus){ exportStatus.textContent = 'Fertig ✅'; }
+        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
     }
 
 } catch(err){
     console.warn('Export WAV failed:', err);
-    alert('Export fehlgeschlagen: ' + (err && err.message ? err.message : err));
+    alert(_t('js_export_failed') + (err && err.message ? err.message : err));
     if(exportStatus){ exportStatus.style.display = 'none'; }
   } finally {
-    if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = 'Arrangement als WAV exportieren'; }
+    if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = _t('js_export_btn_label'); }
   }
 }
 
@@ -3696,7 +3766,7 @@ if(exportWavBtn){ exportWavBtn.addEventListener('click', exportArrangementWav); 
       toggleAutoscrollBtn.addEventListener('click', ()=>{
         autoScrollEnabled = !autoScrollEnabled;
         toggleAutoscrollBtn.classList.toggle('active', autoScrollEnabled);
-        toggleAutoscrollBtn.textContent = `Autoscroll: ${autoScrollEnabled ? 'An' : 'Aus'}`;
+        toggleAutoscrollBtn.textContent = _t(autoScrollEnabled ? 'btn_autoscroll_on' : 'btn_autoscroll_off');
       });
     }
     
@@ -3792,7 +3862,7 @@ exportTxtBtn?.addEventListener('click', ()=>{
   try{
     const modal = document.getElementById('exportModal');
     const ta = document.getElementById('exportTextArea');
-    if(!modal || !ta){ alert('Popup konnte nicht geöffnet werden.'); return; }
+    if(!modal || !ta){ alert(_t('js_popup_error')); return; }
     ta.value = buildExportPopupText();
     modal.style.display = 'flex';
     ta.focus(); ta.select();
@@ -3833,8 +3903,8 @@ document.addEventListener('click', async (e) => {
         const ok = document.execCommand('copy');
         if (!ok) throw new Error('execCommand failed');
       }
-      e.target.textContent = 'Kopiert!';
-      setTimeout(()=>{ e.target.textContent = 'Alles kopieren'; }, 1200);
+      e.target.textContent = _t('js_copied');
+      setTimeout(()=>{ e.target.textContent = _t('js_copy_all'); }, 1200);
     } catch (err) {
       console.warn('Copy failed', err);
       // last-resort fallback: temporary textarea
@@ -3851,7 +3921,7 @@ document.addEventListener('click', async (e) => {
         e.target.textContent = 'Kopiert!';
         setTimeout(()=>{ e.target.textContent = 'Alles kopieren'; }, 1200);
       } catch (_) {
-        alert('Kopieren konnte nicht durchgeführt werden.');
+        alert(_t('js_copy_error'));
       }
     }
   }
@@ -3930,39 +4000,35 @@ document.addEventListener('click', async (e) => {
     }
 
     const now  = ac.currentTime;
-    const MIN_LEAD   = 0.012;   // minimale Vorlaufzeit zum sicheren Planen (~12ms)
-    const FADE_IN    = 0.020;   // Einblend-Dauer neue Source (~20ms, verhindert Knackser)
+    const MIN_LEAD = 0.012; // minimale Vorlaufzeit zum sicheren Planen (~12ms)
+    const FADE     = 0.006; // 6ms — unhörbar kurz, verhindert aber Knackser am Schnittpoint
 
     // Wenn eine absolute Kontextzeit übergeben wurde (exakter Segment‑Boundary),
     // dann exakt dort springen; sonst mit MIN_LEAD in der Zukunft.
     let when = (Number.isFinite(whenAbs) && whenAbs > (now + 0.002)) ? whenAbs : (now + MIN_LEAD);
-    // Safety: nicht zu weit in die Zukunft verschieben
     if (when < now + 0.002) when = now + 0.002;
 
-    // Altes Signal zum Boundary-Zeitpunkt ausblenden und danach stoppen
+    // Altes Signal: volle Lautstärke bis 6ms vor dem Boundary halten, dann auf 0 rampen.
+    // Kein langer Fade – der Source bleibt bis zum letzten Moment auf 1.0, damit
+    // der Übergang beim Hören wie ein sauberer Schnitt klingt.
     try{
       const _oldSrc  = engineSource;
       const _oldGain = engineGain;
       if (_oldGain && _oldGain.gain){
-        // cancelAndHoldAtTime hält den Gain exakt am aktuellen berechneten Wert –
-        // verhindert den Knackser durch abrupten Gain-Sprung auf 1.
-        // Fallback für Browser ohne cancelAndHoldAtTime (z.B. Firefox).
+        // cancelAndHoldAtTime / Fallback für Firefox
         if (typeof _oldGain.gain.cancelAndHoldAtTime === 'function') {
           _oldGain.gain.cancelAndHoldAtTime(now);
         } else {
           _oldGain.gain.cancelScheduledValues(now);
           _oldGain.gain.setValueAtTime(_oldGain.gain.value, now);
         }
-        // Vom aktuellen Wert (0–1) sanft auf 0 rampen – kein harter Sprung mehr.
+        // Erst ab fadeOutStart auf 0 rampen (6ms vor Boundary), nicht ab jetzt.
+        const fadeOutStart = Math.max(now + 0.001, when - FADE);
+        _oldGain.gain.setValueAtTime(1.0, fadeOutStart);
         _oldGain.gain.linearRampToValueAtTime(0, when);
       }
       if (_oldSrc && typeof _oldSrc.stop === 'function'){
-        try { _oldSrc.stop(when + 0.004); } catch(_){}
-        // Falls der Crossfade-Zeitpunkt weit in der Zukunft liegt: alten Source
-        // sofort vom Audio-Graphen trennen, damit er kein Geister-Audio erzeugt.
-        if (when > now + 0.1) {
-          try { _oldSrc.disconnect(); } catch(_){}
-        }
+        try { _oldSrc.stop(when + 0.002); } catch(_){}
       }
     }catch(_){}
 
@@ -3975,10 +4041,10 @@ document.addEventListener('click', async (e) => {
     src.loopEnd   = duration || 0;
 
     const g = ac.createGain();
-    // Start bei 0 und längeres Einblenden ab 'when' (20ms statt 8ms → weniger Knackser)
+    // Gain bei 0 halten bis `when`, dann in 6ms auf 1 rampen – kein Pop, kein hörbares Einblenden.
     g.gain.setValueAtTime(0, now);
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(1, when + FADE_IN);
+    g.gain.linearRampToValueAtTime(1, when + FADE);
 
     src.connect(g); g.connect(masterGain);
 
@@ -4104,7 +4170,7 @@ try{
     }
   }
 }catch(_){}
-if (t >= segEnd - 0.02){
+if (t >= segEnd - 0.05){
   // Initialisiere Wiederholungszähler, falls nötig
   if (typeof __seqRepsLeft === 'undefined') { __seqRepsLeft = 0; }
   const curM = getMarkerById(seqCurrentStartId);
@@ -4734,9 +4800,9 @@ function firstPlayableId(){
         html += '<div style="display:flex; flex-wrap:wrap; padding:0 6px 10px 6px;">' + near.slice(0,24).map(r => pill(r.word, r.score)).join('') + '</div>';
       }
       if (!perfect.length && !near.length) {
-        html = '<div style="padding:12px 10px; color:#9e9e9e;">Keine Vorschläge gefunden.</div>';
+        html = '<div style="padding:12px 10px; color:#9e9e9e;">' + _t('js_no_rhymes') + '</div>';
       }
-      popHeader.textContent = 'Reime zu „' + word + '“';
+      popHeader.textContent = _t('js_rhyme_for').replace('{word}', word);
       popBody.innerHTML = html;
       pop.style.display = 'block';
     }
@@ -4760,8 +4826,8 @@ function firstPlayableId(){
       const { word, wordRange } = expanded;
       currentRange = wordRange;
       const rect = caretRectFromRange(wordRange);
-      popHeader.textContent = 'Lade Reime …';
-      popBody.innerHTML = '<div style="padding:12px 10px; color:#9e9e9e;">Suche …</div>';
+      popHeader.textContent = _t('js_rhyme_loading');
+      popBody.innerHTML = '<div style="padding:12px 10px; color:#9e9e9e;">' + _t('js_rhyme_searching') + '</div>';
       placePopover(rect);
 
       (function(){
@@ -4771,8 +4837,8 @@ function firstPlayableId(){
       })()
         .then(()=>{})
         .catch(() => {
-          popHeader.textContent = 'Reime zu „' + word + '“';
-          popBody.innerHTML = '<div style="padding:12px 10px; color:#ef4444;">Fehler beim Laden.</div>';
+          popHeader.textContent = _t('js_rhyme_for').replace('{word}', word);
+          popBody.innerHTML = '<div style=”padding:12px 10px; color:#ef4444;”>' + _t('js_rhyme_error') + '</div>';
         });
     });
 
@@ -4963,21 +5029,11 @@ function firstPlayableId(){
     modal.innerHTML = `
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="modal-header">
-          <div id="helpTitle" class="modal-title">Waveform</div>
-          <button id="helpClose" class="btn btn-sm" aria-label="Schließen">Schließen</button>
+          <div id="helpTitle" class="modal-title" data-i18n="js_waveform_help_title">${_t('js_waveform_help_title')}</div>
+          <button id="helpClose" class="btn btn-sm" data-i18n="btn_close" data-i18n-aria="btn_close">${_t('btn_close')}</button>
         </div>
         <div class="modal-body">
-          <pre>
-Lade deine Audiodatei und bestimme BPM Tempo und Taktart. 
-
-Verschiebe den Cursor per Drag & Drop, oder mit Taps in der Timeline. 
-
-Zoome und scrolle mit Fingergesten. 
-
-Kürze leere Stellen am Anfang oder Ende mit den Trim Buttons.
-
-Deaktiviere die Snap Grid Magnetfunktion für mehr Präzision.
-          </pre>
+          <pre style="white-space:pre-wrap;font-family:inherit;" data-i18n="js_waveform_help_text">${_t('js_waveform_help_text')}</pre>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -4994,8 +5050,10 @@ Deaktiviere die Snap Grid Magnetfunktion für mehr Präzision.
     const btn = document.createElement("button");
     btn.id = "gridHelp";
     btn.className = "help-badge";
-    btn.title = "Kurzanleitung";
-    btn.setAttribute("aria-label","Kurzanleitung");
+    btn.title = _t('js_guide_title');
+    btn.setAttribute("aria-label", _t('js_guide_title'));
+    btn.setAttribute("data-i18n-title", "js_guide_title");
+    btn.setAttribute("data-i18n-aria", "js_guide_title");
     btn.appendChild(makeQSvg());
     snap.insertAdjacentElement("afterend", btn);
 

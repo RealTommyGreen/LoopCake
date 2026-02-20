@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 
 <html lang="de">
 <head>
@@ -6,7 +6,8 @@
 <meta content="width=device-width,initial-scale=1,user-scalable=no" name="viewport"/>
 <title>LoopCake</title>
 <link rel="stylesheet" href="style.css">
-
+<script defer src="translations_de.js"></script>
+<script defer src="translations_en.js"></script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
 </script>
 
 <!-- Seiten-Navigation -->
-<nav class="page-nav" id="pageNav" aria-label="Seitennavigation">
+<nav class="page-nav" id="pageNav" aria-label="Seitennavigation" data-i18n-aria="nav_aria">
   <button class="page-nav-btn active" id="navPlayer" aria-label="Player">
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="1"  y="5"  width="2" height="6"  rx="1" fill="currentColor"/>
@@ -33,7 +34,7 @@
       <rect x="9"  y="4"  width="2" height="8"  rx="1" fill="currentColor"/>
       <rect x="13" y="6"  width="2" height="4"  rx="1" fill="currentColor"/>
     </svg>
-    Player
+    <span data-i18n="nav_player">Player</span>
   </button>
   <button class="page-nav-btn" id="navEditor" aria-label="Editor">
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -41,24 +42,24 @@
       <rect x="2" y="7"  width="9"  height="1.5" rx="0.75" fill="currentColor"/>
       <rect x="2" y="11" width="11" height="1.5" rx="0.75" fill="currentColor"/>
     </svg>
-    Editor
+    <span data-i18n="nav_editor">Editor</span>
   </button>
 </nav>
 <!-- Floating Media Controls -->
-<div aria-label="Wiedergabesteuerung" class="media-fab">
-<button aria-label="Abspielen" class="fab" id="floatPlay" title="Abspielen">
+<div aria-label="Wiedergabesteuerung" class="media-fab" data-i18n-aria="fab_aria">
+<button aria-label="Abspielen" class="fab" id="floatPlay" title="Abspielen" data-i18n-aria="fab_play_aria" data-i18n-title="fab_play_title">
 <svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
 <path d="M8 5v14l11-7z" fill="#90caf9"></path>
 </svg>
 </button>
-<button aria-label="Stop" class="fab stop" id="floatStop" title="Stop">
+<button aria-label="Stop" class="fab stop" id="floatStop" title="Stop" data-i18n-title="fab_stop_title">
 <svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
 <rect fill="#fca5a5" height="12" rx="2" width="12" x="6" y="6"></rect>
 </svg>
 </button>
 </div>
 <div class="scene">
-<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button></div>
+<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button><select id="langSelect" class="lang-select" aria-label="Language" title="Language"><option value="de">DE</option><option value="en">EN</option></select></div>
 <div class="book" id="book">
 <!-- Linke Seite (bestehende App) -->
 <section class="page left">
@@ -69,13 +70,13 @@
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path></svg>
 </span>
-          Lade Projekt
+          <span data-i18n="btn_load_project">Lade Projekt</span>
         </label>
 <button class="btn" id="saveProject">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
 </span>
-          Speichere Projekt
+          <span data-i18n="btn_save_project">Speichere Projekt</span>
         </button>
 <input accept="application/json,.json" class="file" id="loadProjectFile" type="file"/>
 </div>
@@ -85,13 +86,13 @@
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M12 16V4m0 0l3 3m-3-3L9 7M4 20h16" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
 </span>
-          Datei laden
+          <span data-i18n="btn_load_file">Datei laden</span>
         </label>
 <button class="btn warn" id="clearBtn">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-linecap="round" stroke-width="1.8"></path></svg>
 </span>
-          Zurücksetzen
+          <span data-i18n="btn_reset">Zurücksetzen</span>
         </button>
 <input accept=".mp3,.wav,audio/*" class="file" id="file" type="file"/>
 </div>
@@ -99,45 +100,45 @@
 <!-- Row 3: Dateiname / BPM -->
 <div class="grid-2">
 <div>
-<div class="label">Dateiname</div>
+<div class="label" data-i18n="label_filename">Dateiname</div>
 <div class="filename-chip"><span class="dot"></span><span id="fileInfo">–</span></div>
 </div>
 <div>
-<div class="label">Tempo (Original BPM)</div>
+<div class="label" data-i18n="label_bpm">Tempo (Original BPM)</div>
 <input class="field mono" id="bpm" placeholder="" inputmode="decimal" type="text"/>
-<button class="btn" id="tapBpm" style="margin-top:8px;width:100%;" title="Tippe im Takt">Tap BPM</button>
+<button class="btn" id="tapBpm" style="margin-top:8px;width:100%;" title="Tippe im Takt" data-i18n-title="btn_tap_bpm_title">Tap BPM</button>
 </div>
 </div>
 <!-- Waveform -->
 <div class="section-gap"></div>
 <!-- Trim Controls (neu) -->
 <div class="grid-3" id="trimControls" style="margin-bottom:6px; display:flex; gap:6px; align-items:center; justify-content:flex-start;">
-<button class="btn btn-sm" id="trimFront" title="Alles vor dem Cursor entfernen">Trim Front</button>
-<button class="btn btn-sm" id="trimBack" title="Alles nach dem Cursor entfernen">Trim Back</button>
-<button class="btn btn-sm" id="undoTrim" title="Letzten Schnitt rückgängig machen">Undo</button>
-<button class="btn btn-sm toggle active" id="gridSnapBtn" title="Cursor am Raster einrasten">Grid Snap</button>
+<button class="btn btn-sm" id="trimFront" title="Alles vor dem Cursor entfernen" data-i18n="btn_trim_front" data-i18n-title="btn_trim_front_title">Trim Front</button>
+<button class="btn btn-sm" id="trimBack" title="Alles nach dem Cursor entfernen" data-i18n="btn_trim_back" data-i18n-title="btn_trim_back_title">Trim Back</button>
+<button class="btn btn-sm" id="undoTrim" title="Letzten Schnitt rückgängig machen" data-i18n="btn_undo" data-i18n-title="btn_undo_title">Undo</button>
+<button class="btn btn-sm toggle active" id="gridSnapBtn" title="Cursor am Raster einrasten" data-i18n="btn_grid_snap" data-i18n-title="btn_grid_snap_title">Grid Snap</button>
 </div>
-<canvas aria-label="Wellenform" height="240" id="wave"></canvas>
+<canvas aria-label="Wellenform" height="240" id="wave" data-i18n-aria="wave_aria"></canvas>
 <!-- Marker setzen / entfernen -->
 <div class="v-gap"></div>
 <div id="markerControls">
-<button class="btn btn-sm ok" id="addMarker" title="Marker am Cursor setzen">
+<button class="btn btn-sm ok" id="addMarker" title="Marker am Cursor setzen" data-i18n-title="btn_add_marker_title">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24">
 <path d="M12 5v14M5 12h14" stroke="#86efac" stroke-linecap="round" stroke-width="1.8"></path>
 </svg>
 </span>
-    Marker setzen
+    <span data-i18n="btn_add_marker">Marker setzen</span>
   </button>
-<button class="btn btn-sm warn" id="deleteMarker" title="Marker am Cursor entfernen">
+<button class="btn btn-sm warn" id="deleteMarker" title="Marker am Cursor entfernen" data-i18n-title="btn_del_marker_title">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24">
 <path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-linecap="round" stroke-width="1.8"></path>
 </svg>
 </span>
-    Marker entfernen
+    <span data-i18n="btn_del_marker">Marker entfernen</span>
   </button>
-<button aria-label="Hilfe zu Markern &amp; Loop" class="help-badge" id="markerHelp" title="Hilfe">
+<button aria-label="Hilfe zu Markern &amp; Loop" class="help-badge" id="markerHelp" title="Hilfe" data-i18n-aria="btn_marker_help_aria" data-i18n-title="btn_help_title">
 <svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
 <circle cx="12" cy="12" fill="#90caf9" r="10"></circle>
 <path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#1e1e1e" stroke-linecap="round" stroke-width="1.8"></path>
@@ -150,28 +151,28 @@
 </div>
 <div class="time-pitch-row" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:14px; margin-top:8px;">
 <div class="taktart" style="display:flex; align-items:center; gap:6px;">
-<label class="label" for="timeSig" style="margin-right:6px;">Taktart</label>
+<label class="label" for="timeSig" style="margin-right:6px;" data-i18n="label_time_sig">Taktart</label>
 <select class="field" id="timeSig" style="display:inline-block; width:auto; padding:6px 10px;">
 <option selected="" value="4">4/4</option>
 <option value="3">3/4</option>
 </select>
 </div>
 <div class="pitchCtrl" style="display:flex; align-items:center; gap:6px;">
-<label class="label" title="Tonart ± 24 Halbtöne">Pitch</label>
-<button class="btn" id="pitchMinus" style="padding:6px 10px;" title="Halbton runter">–</button>
+<label class="label" title="Tonart ± 24 Halbtöne" data-i18n="label_pitch" data-i18n-title="label_pitch_title">Pitch</label>
+<button class="btn" id="pitchMinus" style="padding:6px 10px;" title="Halbton runter" data-i18n-title="btn_pitch_minus_title">–</button>
 <div class="mono" id="pitchVal" style="min-width:3em; text-align:center;">+0 st</div>
-<button class="btn" id="pitchPlus" style="padding:6px 10px;" title="Halbton hoch">+</button>
+<button class="btn" id="pitchPlus" style="padding:6px 10px;" title="Halbton hoch" data-i18n-title="btn_pitch_plus_title">+</button>
 </div>
 <div class="tempoCtrl" style="display:flex; align-items:center; gap:6px;">
-<label class="label" title="Wiedergabetempo – ändert nicht das Projekt-BPM oder das Raster">Playback Tempo</label>
-<button class="btn" id="tempoMinus" style="padding:6px 10px;" title="Tempo −0,5 BPM">–</button>
+<label class="label" title="Wiedergabetempo – ändert nicht das Projekt-BPM oder das Raster" data-i18n="label_playback_tempo" data-i18n-title="label_playback_tempo_title">Playback Tempo</label>
+<button class="btn" id="tempoMinus" style="padding:6px 10px;" title="Tempo −0,5 BPM" data-i18n-title="btn_tempo_minus_title">–</button>
 <input class="field mono" id="tempoVal" inputmode="decimal" type="text" placeholder="—" style="width:5.5em; padding:6px 8px; text-align:center;" title="Tempo manuell eingeben, Enter zum Übernehmen"/>
-<button class="btn" id="tempoPlus" style="padding:6px 10px;" title="Tempo +0,5 BPM">+</button>
-<button class="btn" id="tempoReset" style="padding:6px 9px; opacity:.7;" title="Tempo zurücksetzen auf Projekt-BPM">×</button>
+<button class="btn" id="tempoPlus" style="padding:6px 10px;" title="Tempo +0,5 BPM" data-i18n-title="btn_tempo_plus_title">+</button>
+<button class="btn" id="tempoReset" style="padding:6px 9px; opacity:.7;" title="Tempo zurücksetzen auf Projekt-BPM" data-i18n-title="btn_tempo_reset_title">×</button>
 </div>
 </div>
 <div class="v-gap"></div>
-<div class="card" id="markerSeqControls" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;"><div class="seq-left" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input id="playSeqToggle" style="width:18px;height:18px; accent-color:#5c9eff; cursor:pointer;" type="checkbox"/><span>Custom Arrangement</span></div><button aria-label="Hilfe zu Custom Arrangement" class="help-badge" id="seqHelp" title="Hilfe">
+<div class="card" id="markerSeqControls" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;"><div class="seq-left" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input id="playSeqToggle" style="width:18px;height:18px; accent-color:#5c9eff; cursor:pointer;" type="checkbox"/><span data-i18n="label_custom_arr">Custom Arrangement</span></div><button aria-label="Hilfe zu Custom Arrangement" class="help-badge" id="seqHelp" title="Hilfe" data-i18n-aria="btn_seq_help_aria" data-i18n-title="btn_help_title">
 <svg aria-hidden="true" fill="none" viewbox="0 0 24 24">
 <circle cx="12" cy="12" fill="#90caf9" r="10"></circle>
 <path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#1e1e1e" stroke-linecap="round" stroke-width="1.8"></path>
@@ -185,11 +186,11 @@
 <div class="grid-2">
 <button class="btn big primary" id="playSel">
 <span class="icon play"><svg fill="#90caf9" viewbox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg></span>
-          Abspielen
+          <span data-i18n="btn_play">Abspielen</span>
         </button>
 <button class="btn big" id="pauseBtn">
 <span class="icon stop"><svg fill="#fca5a5" viewbox="0 0 24 24"><rect height="12" rx="2" width="12" x="6" y="6"></rect></svg></span>
-          Stop
+          <span data-i18n="btn_stop">Stop</span>
         </button>
 
 <!-- Marker-Liste -->
@@ -197,7 +198,7 @@
 </div>
 <div class="v-gap"></div>
 <div id="exportWrap" style="display:block;">
-  <button class="btn big" id="exportWavBtn" title="Arrangement als WAV exportieren">Arrangement als WAV exportieren</button>
+  <button class="btn big" id="exportWavBtn" title="Arrangement als WAV exportieren" data-i18n="btn_export_wav" data-i18n-title="btn_export_wav_title">Arrangement als WAV exportieren</button>
 </div>
 <div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
 </div><!-- /page-body left -->
@@ -207,14 +208,14 @@
 <div class="page-body">
 <div class="card note-wrap">
 <div class="note-tools">
-<button class="btn toggle" id="toggleAutoscroll" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
-<button class="btn toggle" id="importMarkersBtn" title="Custom Arrangement in Editor übernehmen">Custom Arrangement übernehmen</button>
-<div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;">Reim-Popups</label>
+<button class="btn toggle" id="toggleAutoscroll" title="Automatisches Scrollen ein/aus" data-i18n="btn_autoscroll_on" data-i18n-title="btn_autoscroll_title">Autoscroll: An</button>
+<button class="btn toggle" id="importMarkersBtn" title="Custom Arrangement in Editor übernehmen" data-i18n="btn_import_markers" data-i18n-title="btn_import_markers_title">Custom Arrangement übernehmen</button>
+<div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;" data-i18n="label_rhyme_popups">Reim-Popups</label>
 <select class="field" id="rhymeMode" style="display:inline-block; width:auto; padding:8px 10px;">
-<option selected="" value="off">Aus</option>
-<option value="de">Deutsch</option>
-<option value="en">Englisch</option>
-</select><button aria-label="Hilfe zum Loopcake Editor" class="help-badge" id="editorHelp" title="Hilfe">
+<option selected="" value="off" data-i18n="rhyme_opt_off">Aus</option>
+<option value="de" data-i18n="rhyme_opt_de">Deutsch</option>
+<option value="en" data-i18n="rhyme_opt_en">Englisch</option>
+</select><button aria-label="Hilfe zum Loopcake Editor" class="help-badge" id="editorHelp" title="Hilfe" data-i18n-aria="btn_editor_help_aria" data-i18n-title="btn_help_title">
   <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="10" fill="#90caf9"></circle>
     <path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#1e1e1e" stroke-linecap="round" stroke-width="1.8"></path>
@@ -224,7 +225,7 @@
 </div>
 <div class="lyricsList" id="lyricsList"></div>
 <div class="note-export">
-<button class="btn" id="exportTxtBtn">Export</button>
+<button class="btn" id="exportTxtBtn" data-i18n="btn_export_txt">Export</button>
 </div>
 </div>
 </div><!-- /page-body right -->
@@ -238,7 +239,7 @@
 <!-- ===== Ende Playlist-Dominanz & Jump-Guard Patch ===== -->
 <!-- === Rhyme popover for editor lines === -->
 <div aria-live="polite" id="rhyme-popover" role="dialog" style="position: fixed; z-index: 99999; display:none; max-width: 360px; background: linear-gradient(160deg, rgba(255,255,255,0.03) 0%, transparent 100%), #15151c; border:1px solid rgba(255,255,255,0.08); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05) inset; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden; backdrop-filter:blur(8px);">
-<div id="rhyme-popover-header" style="padding:11px 14px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.07); color:#eaeaf0; letter-spacing:0.2px;">Reime</div>
+<div id="rhyme-popover-header" style="padding:11px 14px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.07); color:#eaeaf0; letter-spacing:0.2px;" data-i18n="rhyme_popover_title">Reime</div>
 <div id="rhyme-popover-body" style="max-height: 280px; overflow:auto; background:rgba(0,0,0,0.2);"></div>
 <div style="padding:8px 14px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px; color:#606075;">
       Rhymes by <a href="https://rhymebrain.com" rel="noopener" target="_blank" style="color:#5b9fff;">RhymeBrain</a>
@@ -249,14 +250,14 @@
 <div class="modal-backdrop" id="exportModal" style="display:none;">
 <div class="modal-card">
 <div class="modal-header">
-<div class="modal-title">Exportierter Text</div>
-<button class="btn btn-sm" id="closeExportModal" title="Schließen">Schließen</button>
+<div class="modal-title" data-i18n="modal_export_title">Exportierter Text</div>
+<button class="btn btn-sm" id="closeExportModal" title="Schließen" data-i18n="btn_close" data-i18n-title="btn_close">Schließen</button>
 </div>
 <div class="modal-body">
 <textarea class="field mono" id="exportTextArea" readonly="" rows="16"></textarea>
 </div>
 <div class="modal-footer">
-  <button class="btn" id="copyExportText" title="In die Zwischenablage kopieren">Alles kopieren</button>
+  <button class="btn" id="copyExportText" title="In die Zwischenablage kopieren" data-i18n="btn_copy_all" data-i18n-title="btn_copy_title">Alles kopieren</button>
 </div>
 
 </div>
@@ -266,32 +267,32 @@
 <div class="modal-card">
 <div class="modal-header">
 <div class="modal-title" id="infoTitle"></div>
-<button aria-label="Schließen" title="Schließen" class="btn btn-sm" id="infoClose">Schließen</button>
+<button aria-label="Schließen" title="Schließen" class="btn btn-sm" id="infoClose" data-i18n="btn_close" data-i18n-aria="btn_close" data-i18n-title="btn_close">Schließen</button>
 </div>
 <div class="modal-body" style="display:block;">
 <div>
-<p><strong>LoopCake 1.0</strong></p><br/>
-<p class="muted">© 2025 Tom Ottow. Alle Rechte vorbehalten.</p><br/>
-<p>Diese App verarbeitet grundsätzlich alle Daten lokal auf Ihrem Gerät.</p>
-<p>Bei Nutzung der Reimfunktion werden eingegebene Wörter an den externen Dienst
+<p><strong data-i18n="info_version">LoopCake 1.0</strong></p><br/>
+<p class="muted" data-i18n="info_copyright">© 2025 Tom Ottow. Alle Rechte vorbehalten.</p><br/>
+<p data-i18n="info_local_data">Diese App verarbeitet grundsätzlich alle Daten lokal auf Ihrem Gerät.</p>
+<p><span data-i18n="info_rhyme_prefix">Bei Nutzung der Reimfunktion werden eingegebene Wörter an den externen Dienst</span>
         <a href="https://rhymebrain.com" rel="noopener noreferrer" target="_blank">RhymeBrain</a>
-        übermittelt, um passende Reimvorschläge zu erhalten.</p>
-<p>Es werden keine weiteren personenbezogenen Daten übertragen.</p>
+        <span data-i18n="info_rhyme_suffix">übermittelt, um passende Reimvorschläge zu erhalten.</span></p>
+<p data-i18n="info_no_personal_data">Es werden keine weiteren personenbezogenen Daten übertragen.</p>
 <br/>
 
-    <p><strong>Keyboard Shortcuts:</strong></p>
+    <p><strong data-i18n="info_shortcuts_title">Keyboard Shortcuts:</strong></p>
     <ul>
-        <li><strong>Space</strong> = Play/Stop</li>
-        <li><strong>Backspace</strong> = Cursor zum Loopanfang / Custom Arrangement Beginn</li>
-        <li><strong>T</strong> = Setze Marker</li>
-        <li><strong>R</strong> = Entferne Marker</li>
-        <li><strong>A</strong> = Marker aktiv/inaktiv</li>
-        <li><strong>S</strong> = Snap Grid Ein/Aus</li>
-        <li><strong>Pfeiltasten</strong> = Cursor auf der Waveform bewegen</li>
-        <li><strong>Shift + Pfeiltasten</strong> = Zwischen Markern springen</li>
-	<li><strong>Shift + Mausrad</strong> = Waveform vergrößern/verkleinern</li>
-	<li><strong>Linke Maustaste + Ziehen</strong> = Waveform bewegen</li>
-        <li><strong>CTRL + Z</strong> = Undo</li>
+        <li><strong>Space</strong> = <span data-i18n="shortcut_space">Play/Stop</span></li>
+        <li><strong>Backspace</strong> = <span data-i18n="shortcut_backspace">Cursor zum Loopanfang / Custom Arrangement Beginn</span></li>
+        <li><strong>T</strong> = <span data-i18n="shortcut_t">Setze Marker</span></li>
+        <li><strong>R</strong> = <span data-i18n="shortcut_r">Entferne Marker</span></li>
+        <li><strong>A</strong> = <span data-i18n="shortcut_a">Marker aktiv/inaktiv</span></li>
+        <li><strong>S</strong> = <span data-i18n="shortcut_s">Snap Grid Ein/Aus</span></li>
+        <li><strong><span data-i18n="shortcut_arrows_key">Pfeiltasten</span></strong> = <span data-i18n="shortcut_arrows">Cursor auf der Waveform bewegen</span></li>
+        <li><strong>Shift + <span data-i18n="shortcut_arrows_key">Pfeiltasten</span></strong> = <span data-i18n="shortcut_shift_arrows">Zwischen Markern springen</span></li>
+	<li><strong>Shift + <span data-i18n="shortcut_wheel_key">Mausrad</span></strong> = <span data-i18n="shortcut_shift_wheel">Waveform vergrößern/verkleinern</span></li>
+	<li><strong><span data-i18n="shortcut_drag_key">Linke Maustaste + Ziehen</span></strong> = <span data-i18n="shortcut_drag">Waveform bewegen</span></li>
+        <li><strong>CTRL + Z</strong> = <span data-i18n="shortcut_ctrl_z">Undo</span></li>
     </ul>
 </div>
 </div>
@@ -304,19 +305,19 @@
 <div aria-labelledby="markerHelpTitle" aria-modal="true" class="modal-backdrop info-modal" id="markerHelpModal" role="dialog" style="display:none;">
 <div class="modal-card">
 <div class="modal-header">
-<div class="modal-title" id="markerHelpTitle">Marker &amp; Loops</div>
-<button class="btn btn-sm" id="markerHelpClose" title="Schließen">Schließen</button>
+<div class="modal-title" id="markerHelpTitle" data-i18n="modal_marker_help_title">Marker &amp; Loops</div>
+<button class="btn btn-sm" id="markerHelpClose" title="Schließen" data-i18n="btn_close" data-i18n-title="btn_close">Schließen</button>
 </div>
 <div class="modal-body">
-<pre style="white-space: pre-wrap; font-family: inherit;">Du schreibst gerade deinen Song und willst nur diesen einen Abschnitt fertig kriegen, aber ständig musst du im Player wieder hin- und herspulen? Loope ihn doch einfach! 
+<pre style="white-space: pre-wrap; font-family: inherit;" data-i18n="modal_marker_help_text">Du schreibst gerade deinen Song und willst nur diesen einen Abschnitt fertig kriegen, aber ständig musst du im Player wieder hin- und herspulen? Loope ihn doch einfach!
 
-Erstelle so viele Marker wie du willst und verschiebe sie per Drag &amp; Drop. 
+Erstelle so viele Marker wie du willst und verschiebe sie per Drag &amp; Drop.
 
-Richte sie mit der Snap Grid Magnetfunktion aus, für absolut saubere Loops. 
+Richte sie mit der Snap Grid Magnetfunktion aus, für absolut saubere Loops.
 
 Benenne die Marker frei, für einen perfekten Überblick im Arrangement. Tippe sie doppelt an, um sie umzubenennen.
 
-Aktiviere und deaktiviere Marker mit Antippen. Zwei rote Marker ergeben einen Loop. 
+Aktiviere und deaktiviere Marker mit Antippen. Zwei rote Marker ergeben einen Loop.
 
 Ein aktivierter Loop deaktiviert automatisch ein Custom Arrangement.
 
@@ -324,15 +325,15 @@ Doppeltes Tippen auf die Stop Taste lässt den Cursor zum Startmarker des Loops 
 </div>
 </div>
 </div>
-<div class="modal-backdrop help-modal" id="seqHelpModal"><div class="modal-card"><div class="modal-header"><div class="modal-title">Custom Arrangements</div><button aria-label="Schließen" title="Schließen" class="btn btn-sm btn-close" type="button">Schließen</button></div><div class="modal-body"><pre>Dein Instrumental hat nur einen Refrain am Ende, doch in deinem Kopf klingen zwei besser? Dafür magst du den Anfang der ersten Strophe nicht, die eine schöne Stelle in der zweiten Strophe könnte jedoch doppelt so lang sein? Und wenn doch nur dieser Zwischenteil vor dem Refrain und nicht danach kommen würde… Kein Problem! 
+<div class="modal-backdrop help-modal" id="seqHelpModal"><div class="modal-card"><div class="modal-header"><div class="modal-title" data-i18n="modal_seq_help_title">Custom Arrangements</div><button aria-label="Schließen" title="Schließen" class="btn btn-sm btn-close" type="button" data-i18n="btn_close" data-i18n-aria="btn_close" data-i18n-title="btn_close">Schließen</button></div><div class="modal-body"><pre data-i18n="modal_seq_help_text">Dein Instrumental hat nur einen Refrain am Ende, doch in deinem Kopf klingen zwei besser? Dafür magst du den Anfang der ersten Strophe nicht, die eine schöne Stelle in der zweiten Strophe könnte jedoch doppelt so lang sein? Und wenn doch nur dieser Zwischenteil vor dem Refrain und nicht danach kommen würde… Kein Problem!
 
-Aktiviere das Custom Arrangement und ordne die Abschnitte deiner Markerbereiche per Drag &amp; Drop neu an. 
+Aktiviere das Custom Arrangement und ordne die Abschnitte deiner Markerbereiche per Drag &amp; Drop neu an.
 
-Kopiere deine Abschnitte beliebig oft und puzzle dir deinen ultimativen Beat. 
+Kopiere deine Abschnitte beliebig oft und puzzle dir deinen ultimativen Beat.
 
-Mute Bereiche, die dir nicht gefallen. Diese werden beim Abspielen komplett ausgelassen. 
+Mute Bereiche, die dir nicht gefallen. Diese werden beim Abspielen komplett ausgelassen.
 
-Exportiere dein Custom Arrangement als WAV Audiodatei und nimm sie mit ins Studio. 
+Exportiere dein Custom Arrangement als WAV Audiodatei und nimm sie mit ins Studio.
 
 Ein aktiviertes Custom Arrangement deaktiviert Loops automatisch.
 
@@ -341,28 +342,28 @@ Doppeltes Tippen auf die Stop Taste lässt den Cursor zum Beginn des Arrangement
 <div class="modal-backdrop help-modal" id="editorHelpModal" role="dialog" aria-modal="true" aria-labelledby="editorHelpTitle" style="display:none;">
   <div class="modal-card">
     <div class="modal-header">
-      <div class="modal-title" id="editorHelpTitle">LoopCake Editor</div>
-      <button class="btn btn-sm" id="editorHelpClose" title="Schließen">Schließen</button>
+      <div class="modal-title" id="editorHelpTitle" data-i18n="modal_editor_help_title">LoopCake Editor</div>
+      <button class="btn btn-sm" id="editorHelpClose" title="Schließen" data-i18n="btn_close" data-i18n-title="btn_close">Schließen</button>
     </div>
     <div class="modal-body">
-      <pre style="white-space: pre-wrap; font-family: inherit;">Mit dem LoopCake Editor hast du deine Lyrics voll im Griff - und vor allem im Blick!
+      <pre style="white-space: pre-wrap; font-family: inherit;" data-i18n="modal_editor_help_text">Mit dem LoopCake Editor hast du deine Lyrics voll im Griff - und vor allem im Blick!
 
-Der Editor berechnet automatisch, wie viele Zeilen du schreiben musst und zeigt dir jederzeit, an welcher Stelle deines Songs du dich gerade befindest. 
+Der Editor berechnet automatisch, wie viele Zeilen du schreiben musst und zeigt dir jederzeit, an welcher Stelle deines Songs du dich gerade befindest.
 
-Der Button “Marker übernehmen” richtet dein Textarrangement genau nach deinem Instrumental aus. 
+Der Button "Marker übernehmen" richtet dein Textarrangement genau nach deinem Instrumental aus.
 
-Mit der Autoscroll-Funktion bleibst du auch bei laufendem Playback immer auf die passende Textzeile fokussiert. 
+Mit der Autoscroll-Funktion bleibst du auch bei laufendem Playback immer auf die passende Textzeile fokussiert.
 
-Du willst deinen gesamten Loop oder dein Custom Arrangement gerade nicht ändern, aber doch kurz einen anderen Abschnitt loopen? Halte die Zahl einer Textzeile gedrückt, zwei rote Zahlen ergeben einen Quick Loop. Halte erneut eine der beiden Zahlen gedrückt, um den Quick Loop zu beenden. 
+Du willst deinen gesamten Loop oder dein Custom Arrangement gerade nicht ändern, aber doch kurz einen anderen Abschnitt loopen? Halte die Zahl einer Textzeile gedrückt, zwei rote Zahlen ergeben einen Quick Loop. Halte erneut eine der beiden Zahlen gedrückt, um den Quick Loop zu beenden.
 
-Oder tippe einmal kurz auf die Zahl einer Zeile, um mit der Wiedergabe sofort an diesen Punkt zu springen. 
+Oder tippe einmal kurz auf die Zahl einer Zeile, um mit der Wiedergabe sofort an diesen Punkt zu springen.
 
-Es fehlt dir gerade noch der passende Reim für eine Zeile? Aktiviere die RhymeBrain Integration und tippe auf ein Wort deiner Lyrics, um Vorschläge zu erhalten! 
+Es fehlt dir gerade noch der passende Reim für eine Zeile? Aktiviere die RhymeBrain Integration und tippe auf ein Wort deiner Lyrics, um Vorschläge zu erhalten!
 
 Deine fertigen Lyrics kannst du dir mit dem Export Button vollständig anzeigen und in die Zwischenablage kopieren lassen!</pre>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-sm btn-close" id="editorHelpClose2" title="Schließen" type="button">Schließen</button>
+      <button class="btn btn-sm btn-close" id="editorHelpClose2" title="Schließen" type="button" data-i18n="btn_close" data-i18n-title="btn_close">Schließen</button>
     </div>
   </div>
 </div>
