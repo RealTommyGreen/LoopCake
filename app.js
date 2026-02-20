@@ -5086,3 +5086,36 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 
+
+
+/* ========== Scroll-Hint für Modals ========== */
+(function () {
+  function setupScrollHint(modal) {
+    if (!modal) return;
+    const body = modal.querySelector('.modal-body');
+    const card = modal.querySelector('.modal-card');
+    if (!body || !card) return;
+
+    const hint = document.createElement('div');
+    hint.className = 'scroll-hint';
+    hint.setAttribute('aria-hidden', 'true');
+    hint.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#90caf9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    card.appendChild(hint);
+
+    function update() {
+      const scrollable = body.scrollHeight > body.clientHeight + 4;
+      const nearBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 12;
+      hint.classList.toggle('visible', scrollable && !nearBottom);
+    }
+
+    body.addEventListener('scroll', update, { passive: true });
+    new ResizeObserver(update).observe(body);
+    new MutationObserver(function () {
+      if (modal.style.display !== 'none') requestAnimationFrame(update);
+    }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  ['infoModal', 'markerHelpModal', 'seqHelpModal', 'editorHelpModal'].forEach(function (id) {
+    setupScrollHint(document.getElementById(id));
+  });
+})();

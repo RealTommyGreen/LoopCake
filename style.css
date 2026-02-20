@@ -583,6 +583,7 @@ body {
   z-index: 100000;
 }
 .modal-card {
+  position: relative;
   width: min(900px, 92vw);
   max-height: 85vh;
   display: flex; flex-direction: column;
@@ -648,17 +649,13 @@ body {
   display: block;
   flex: 1 1 auto;
   overflow-y: scroll;
-  scrollbar-gutter: stable both-edges;
-  padding-right: 6px;
 }
 #editorHelpModal .modal-body pre {
   margin: 0;
   white-space: pre-wrap;
   font-family: inherit;
 }
-#editorHelpModal .modal-body::-webkit-scrollbar       { width: 10px; }
-#editorHelpModal .modal-body::-webkit-scrollbar-thumb { background: #303030; border-radius: 999px; }
-#editorHelpModal .modal-body::-webkit-scrollbar-track { background: transparent; }
+#editorHelpModal .modal-body::-webkit-scrollbar { display: none; }
 #editorHelpModal .modal-footer,
 #editorHelpModal .modal-card-foot,
 #editorHelpModal .modal-actions,
@@ -799,4 +796,46 @@ body {
   .page.right .segment-reim-popups { grid-column: 1 / -1; }
   .page.right .lyricsList          { grid-column: 1 / -1; }
   .page.right .note-export         { grid-column: 1; justify-self: start; }
+}
+
+/* ---------- Modal-Scrollleisten ausblenden ---------- */
+.info-modal .modal-body,
+.help-modal .modal-body,
+#markerHelpModal .modal-body,
+#editorHelpModal .modal-body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.info-modal .modal-body::-webkit-scrollbar,
+.help-modal .modal-body::-webkit-scrollbar,
+#markerHelpModal .modal-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- Scroll-Hint ---------- */
+.scroll-hint {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(12, 12, 18, 0.88);
+  border: 1px solid rgba(91, 159, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 10;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+.scroll-hint.visible {
+  visibility: visible;
+  animation: scroll-hint-pulse 1.6s ease-in-out infinite;
+}
+.scroll-hint svg { width: 13px; height: 13px; }
+@keyframes scroll-hint-pulse {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50%       { opacity: 1;   transform: translateY(2px); }
 }
