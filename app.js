@@ -2596,7 +2596,7 @@ ensureDefaultStartEndMarkers();
   markerListEl.innerHTML = "";
   ensureListOrder();
   if(markers.length===0){
-    markerListEl.innerHTML = '<div style="color:#9e9e9e;">Es wurden noch keine Marker erstellt</div>';
+    markerListEl.innerHTML = '<div style="color:#9e9e9e;">Erstelle zuerst neue Marker!</div>';
     return;
   }
   const ordered = markers.slice().sort((a,b)=> (a.listOrder ?? 0) - (b.listOrder ?? 0));

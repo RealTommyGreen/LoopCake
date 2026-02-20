@@ -92,7 +92,7 @@ body {
 .page {
   position: absolute; inset: 0;
   overflow: auto;
-  padding: 2px 20px 100px;
+  padding: 0 20px 100px;
   pointer-events: none;
 }
 .page.left {
@@ -112,7 +112,7 @@ body {
 
 /* Logo-wrap ist direktes Kind von .page und erbt pointer-events: none –
    explizit überschreiben damit die Buttons klickbar bleiben */
-.title-wrap.logo-wrap { pointer-events: auto; }
+.title-wrap.logo-wrap { pointer-events: auto; margin-bottom: 0; }
 
 /* Nur der Seiteninhalt unterhalb des Logos wird animiert.
    will-change / backface-visibility werden per JS nur während
@@ -221,7 +221,7 @@ body {
 .logo-wrap {
   background: #000;
   margin: 0;
-  padding: 7px 22px 5px;
+  padding: 7px 22px 3px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   flex-shrink: 0;
 }
@@ -242,6 +242,8 @@ body {
   border-radius: var(--radius-lg); padding: 18px;
   box-shadow: var(--shadow-md), 0 1px 0 rgba(255,255,255,0.05) inset;
 }
+/* Oberste Karte im Scrollbereich: padding-top auf ein Minimum */
+.page-body > .card { padding-top: 18px; }
 .grid-2      { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stack       { display: grid; gap: 14px; }
 .section-gap { height: 28px; }
