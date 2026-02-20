@@ -118,6 +118,7 @@
 </div>
 <canvas aria-label="Wellenform" height="240" id="wave"></canvas>
 <!-- Marker setzen / entfernen -->
+<div class="v-gap"></div>
 <div id="markerControls">
 <button class="btn btn-sm ok" id="addMarker" title="Marker am Cursor setzen">
 <span class="icon">
@@ -190,15 +191,14 @@
           Stop
         </button>
 
-<div class="v-gap"></div>
-<div class="note-export" id="exportWrap">
-  <button class="btn big" id="exportWavBtn" title="Arrangement als WAV exportieren">Arrangement als WAV exportieren</button>
-</div>
-<div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
-
 <!-- Marker-Liste -->
 <!-- NEU: Reihenfolge-Schalter --><input accept=".mp3,.wav,audio/*" class="file" id="loadAudioForProject" type="file"/>
 </div>
+<div class="v-gap"></div>
+<div id="exportWrap" style="display:block;">
+  <button class="btn big" id="exportWavBtn" style="display:block; width:100%;" title="Arrangement als WAV exportieren">Arrangement als WAV exportieren</button>
+</div>
+<div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
 </section>
 <!-- Rechte Seite: Texteditor gekoppelt an 2-Takt-Gruppen -->
 <section class="page right">
