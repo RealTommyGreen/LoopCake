@@ -58,10 +58,11 @@
 </button>
 </div>
 <div class="scene">
+<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button></div>
 <div class="book" id="book">
 <!-- Linke Seite (bestehende App) -->
 <section class="page left">
-<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;margin-bottom:16px;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button></div>
+<div class="page-body">
 <div class="card stack"><!-- Row 1: Lade/ Speichere Projekt -->
 <div class="grid-2">
 <label class="btn primary" for="loadProjectFile">
@@ -199,10 +200,11 @@
   <button class="btn big" id="exportWavBtn" style="display:block; width:100%;" title="Arrangement als WAV exportieren">Arrangement als WAV exportieren</button>
 </div>
 <div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
+</div><!-- /page-body left -->
 </section>
 <!-- Rechte Seite: Texteditor gekoppelt an 2-Takt-Gruppen -->
 <section class="page right">
-<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;margin-bottom:16px;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadgeRight" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button></div>
+<div class="page-body">
 <div class="card note-wrap">
 <div class="note-tools">
 <button class="btn toggle" id="toggleAutoscroll" title="Automatisches Scrollen ein/aus">Autoscroll: An</button>
@@ -225,6 +227,7 @@
 <button class="btn" id="exportTxtBtn">Export</button>
 </div>
 </div>
+</div><!-- /page-body right -->
 </section>
 </div>
 </div> <!-- ---------- Bisheriges Skript + Flip-Logik ---------- -->

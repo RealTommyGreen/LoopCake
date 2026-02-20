@@ -80,48 +80,63 @@ body {
   width: 100%;
   min-height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .book {
   position: relative;
   width: 100%;
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
 }
 .page {
   position: absolute; inset: 0;
   overflow: auto;
-  padding: 20px 20px 100px;
-  opacity: 0;
-  /* translate3d (not translateX) keeps the element on its own GPU compositor
-     layer in all browsers. scale() is removed – it forces per-frame repaint of
-     the entire page content and is the main cause of jank in Firefox. */
-  transform: translate3d(44px, 0, 0);
-  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 2px 20px 100px;
   pointer-events: none;
-  will-change: opacity, transform;
-  /* backface-visibility promotes to a compositor layer in Gecko (Firefox) */
-  backface-visibility: hidden;
-  /* contain:paint tells Firefox the page's content won't overflow visually,
-     so it can skip painting checks outside this box during the animation */
-  contain: layout style paint;
 }
 .page.left {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
   z-index: 2;
   pointer-events: auto;
 }
 .page.right { z-index: 1; }
 
 .book.flipped .page.left {
+  pointer-events: none;
+  z-index: 1;
+}
+.book.flipped .page.right {
+  z-index: 2;
+  pointer-events: auto;
+}
+
+/* Logo-wrap ist direktes Kind von .page und erbt pointer-events: none –
+   explizit überschreiben damit die Buttons klickbar bleiben */
+.title-wrap.logo-wrap { pointer-events: auto; }
+
+/* Nur der Seiteninhalt unterhalb des Logos wird animiert.
+   will-change / backface-visibility werden per JS nur während
+   der Flip-Animation gesetzt, um Firefox-Scroll-Artefakte zu vermeiden. */
+.page-body {
+  opacity: 0;
+  transform: translate3d(44px, 0, 0);
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.page.left .page-body {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+}
+.book.flipped .page.left .page-body {
   opacity: 0;
   transform: translate3d(-44px, 0, 0);
   pointer-events: none;
 }
-.book.flipped .page.right {
+.book.flipped .page.right .page-body {
   opacity: 1;
   transform: translate3d(0, 0, 0);
-  z-index: 2;
   pointer-events: auto;
 }
 
@@ -138,8 +153,8 @@ body {
 .book.flipped::before { opacity: .5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .page, .page-nav-btn, .page-nav-btn::before { transition: none; }
-  .page { transform: translate3d(0, 0, 0); }
+  .page-body, .page-nav-btn, .page-nav-btn::before { transition: none; }
+  .page-body { transform: translate3d(0, 0, 0); }
 }
 
 /* Scrollbars ausblenden (Scrollen bleibt funktionsfähig) */
@@ -205,9 +220,10 @@ body {
 /* ---------- Logo ---------- */
 .logo-wrap {
   background: #000;
-  margin: -20px -20px 16px;
-  padding: 22px 22px 14px;
+  margin: 0;
+  padding: 7px 22px 5px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
 }
 .logo-wrap img       { display: block; margin: 0 auto; height: auto; max-width: 300px; width: 100%; filter: drop-shadow(0 2px 12px rgba(91,159,255,0.08)); }
 .logo-wrap .info-badge { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); }

@@ -8,7 +8,21 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
     const navPlayer = document.getElementById('navPlayer');
     const navEditor = document.getElementById('navEditor');
 
+    function _flipPromote() {
+      document.querySelectorAll('.page-body').forEach(function(el) {
+        el.style.willChange = 'opacity, transform';
+        el.style.backfaceVisibility = 'hidden';
+      });
+      setTimeout(function() {
+        document.querySelectorAll('.page-body').forEach(function(el) {
+          el.style.willChange = '';
+          el.style.backfaceVisibility = '';
+        });
+      }, 350);
+    }
+
     function showRight(){
+      _flipPromote();
       book.classList.add('flipped');
       navPlayer.classList.remove('active');
       navEditor.classList.add('active');
@@ -69,6 +83,7 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
       } catch(_) {}
     }
     function showLeft(){
+      _flipPromote();
       book.classList.remove('flipped');
       navEditor.classList.remove('active');
       navPlayer.classList.add('active');
