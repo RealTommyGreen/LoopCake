@@ -4889,6 +4889,7 @@ function firstPlayableId(){
 /* ========== Info-Badge Modal ========== */
 (function(){
   const badge = document.getElementById('infoBadge');
+  const badgeRight = document.getElementById('infoBadgeRight');
   const modal = document.getElementById('infoModal');
   const closeBtn = document.getElementById('infoClose');
   const okBtn = document.getElementById('infoOk');
@@ -4910,6 +4911,7 @@ function firstPlayableId(){
   }
 
   badge && badge.addEventListener('click', openModal);
+  badgeRight && badgeRight.addEventListener('click', openModal);
   closeBtn && closeBtn.addEventListener('click', closeModal);
   okBtn && okBtn.addEventListener('click', closeModal);
   // backdrop click

@@ -780,8 +780,8 @@ body {
 .page.right #editorHelp  { margin-left: auto; }
 .page.right .lyricsList  { grid-column: 1 / -1; }
 .page.right .note-export {
-  grid-column: 2;
-  justify-self: end;
+  grid-column: 1;
+  justify-self: start;
   margin-top: 0;
 }
 .page.right .segment-reim-popups select {
@@ -798,5 +798,5 @@ body {
   .page.right #importMarkersBtn    { grid-column: 2; justify-self: end; }
   .page.right .segment-reim-popups { grid-column: 1 / -1; }
   .page.right .lyricsList          { grid-column: 1 / -1; }
-  .page.right .note-export         { grid-column: 2; justify-self: end; }
+  .page.right .note-export         { grid-column: 1; justify-self: start; }
 }
