@@ -773,6 +773,11 @@ updateTempoUI();
     let _panLastX = 0, _panLastT = 0;
     let _inertiaId = null;
 
+    // Gecachte Canvas-Ressourcen (Firefox-Optimierung)
+    let _cachedCtx = null;
+    let _cachedWaveGrad = null, _cachedWaveGradTop = -1, _cachedWaveGradBottom = -1;
+    let _cachedBgGrad = null, _cachedBgGradH = -1;
+
     
     // NEU: Tap-to-seek
     let tapCandidate = false;   // echter Tap ohne nennenswerte Bewegung?
@@ -1718,8 +1723,13 @@ function updateLyricsHighlight(t){
       const targetW = Math.floor(cssW*dpr), targetH = Math.floor(cssH*dpr);
       if(wave.width !== targetW || wave.height !== targetH){
         wave.width = targetW; wave.height = targetH;
+        // Canvas-Resize invalidiert gecachte Gradienten
+        _cachedCtx = null; _cachedBgGrad = null; _cachedWaveGrad = null;
+        _cachedBgGradH = -1; _cachedWaveGradTop = -1;
       }
-      const ctx = wave.getContext('2d');
+      // Context einmal cachen – getContext() ist in Firefox überraschend teuer
+      if(!_cachedCtx) _cachedCtx = wave.getContext('2d');
+      const ctx = _cachedCtx;
       // Peak-Cache aktuell halten
       if(audioBuffer !== peakCacheBuffer) buildPeakCache();
 
@@ -1738,17 +1748,17 @@ function updateLyricsHighlight(t){
       const waveHeight = waveBottom - waveTop;
       const mid = waveTop + waveHeight/2;
 
-      // Background gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, cssH);
-      bgGrad.addColorStop(0,   '#0f0f16');
-      bgGrad.addColorStop(0.5, '#0b0b11');
-      bgGrad.addColorStop(1,   '#090910');
-      ctx.fillStyle = bgGrad; ctx.fillRect(0,0,cssW,cssH);
-      // Subtle center-line glow
-      const midLineGrad = ctx.createLinearGradient(0, mid-1, 0, mid+1);
-      midLineGrad.addColorStop(0, 'rgba(91,159,255,0.06)');
-      midLineGrad.addColorStop(1, 'rgba(91,159,255,0.06)');
-      ctx.fillStyle = midLineGrad; ctx.fillRect(0, mid-0.5, cssW, 1);
+      // Background gradient (gecacht – Firefox erstellt Gradienten teuer)
+      if(_cachedBgGradH !== cssH){
+        _cachedBgGrad = ctx.createLinearGradient(0, 0, 0, cssH);
+        _cachedBgGrad.addColorStop(0,   '#0f0f16');
+        _cachedBgGrad.addColorStop(0.5, '#0b0b11');
+        _cachedBgGrad.addColorStop(1,   '#090910');
+        _cachedBgGradH = cssH;
+      }
+      ctx.fillStyle = _cachedBgGrad; ctx.fillRect(0,0,cssW,cssH);
+      // Subtle center-line glow (einfacher fillRect, kein Gradient nötig)
+      ctx.fillStyle = 'rgba(91,159,255,0.06)'; ctx.fillRect(0, mid-0.5, cssW, 1);
 
       // Quick-Loop-Füllung (hat Vorrang)
       try{
@@ -1777,13 +1787,16 @@ function updateLyricsHighlight(t){
         const startSample = Math.max(0, viewStart) * sampleRate;
         const endSample   = Math.min(audioBuffer.length, viewEnd() * sampleRate);
         const { mins, maxs, binSize, count } = peakCache;
-        const waveGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
-        waveGrad.addColorStop(0,   'rgba(91,159,255,0.55)');
-        waveGrad.addColorStop(0.35,'rgba(80,140,240,0.75)');
-        waveGrad.addColorStop(0.5, 'rgba(100,165,255,0.95)');
-        waveGrad.addColorStop(0.65,'rgba(80,140,240,0.75)');
-        waveGrad.addColorStop(1,   'rgba(91,159,255,0.55)');
-        ctx.strokeStyle = waveGrad;
+        if(_cachedWaveGradTop !== waveTop || _cachedWaveGradBottom !== waveBottom){
+          _cachedWaveGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
+          _cachedWaveGrad.addColorStop(0,   'rgba(91,159,255,0.55)');
+          _cachedWaveGrad.addColorStop(0.35,'rgba(80,140,240,0.75)');
+          _cachedWaveGrad.addColorStop(0.5, 'rgba(100,165,255,0.95)');
+          _cachedWaveGrad.addColorStop(0.65,'rgba(80,140,240,0.75)');
+          _cachedWaveGrad.addColorStop(1,   'rgba(91,159,255,0.55)');
+          _cachedWaveGradTop = waveTop; _cachedWaveGradBottom = waveBottom;
+        }
+        ctx.strokeStyle = _cachedWaveGrad;
         ctx.lineWidth = 1;
         ctx.beginPath();
         const samplesPerPx = (endSample - startSample) / cssW;
@@ -1812,20 +1825,30 @@ function updateLyricsHighlight(t){
         const startMajor = Math.ceil(viewStart/step)*step;
         const startMinor = Math.ceil(viewStart/minor)*minor;
 
+        // Minor-Ticks: alles in EINEN Path batchen → ein stroke()-Aufruf statt N
         ctx.strokeStyle='rgba(255,255,255,0.18)';
         ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.beginPath();
         for(let t=startMinor; t<=viewEnd()+EPS; t+=minor){
           if(Math.abs((t/step) - Math.round(t/step)) < 1e-6) continue;
           const x = timeToX(t, cssW);
-          ctx.beginPath(); ctx.moveTo(x, waveBottom-7); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+          ctx.moveTo(x, waveBottom-7); ctx.lineTo(x, waveBottom-3);
         }
+        ctx.stroke();
 
+        // Major-Ticks: Linien gebatcht, Text separat (kann nicht gebatcht werden)
         ctx.strokeStyle='rgba(255,255,255,0.35)';
         ctx.fillStyle='rgba(160,170,200,0.9)';
         ctx.font='10px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.beginPath();
         for(let t=startMajor; t<=viewEnd()+EPS; t+=step){
           const x = timeToX(t, cssW);
-          ctx.beginPath(); ctx.moveTo(x, waveBottom-13); ctx.lineTo(x, waveBottom-3); ctx.stroke();
+          ctx.moveTo(x, waveBottom-13); ctx.lineTo(x, waveBottom-3);
+        }
+        ctx.stroke();
+        for(let t=startMajor; t<=viewEnd()+EPS; t+=step){
+          const x = timeToX(t, cssW);
           const lbl = shortTimeLabel(t);
           const w = ctx.measureText(lbl).width;
           const tx = Math.min(Math.max(x - w/2, 2), cssW - w - 2);
@@ -1833,17 +1856,19 @@ function updateLyricsHighlight(t){
         }
       }
 
-      // Raster (2-Takt-Linien, Snap)
+      // Raster (2-Takt-Linien) – alles in EINEN gestrichelten Path gebatcht
       const stepGrid = gridStep();
       if(duration>0 && stepGrid>0){
         ctx.strokeStyle='rgba(91,159,255,0.35)';
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 4]);
+        ctx.beginPath();
         const t0 = Math.ceil((viewStart - EPS) / stepGrid) * stepGrid;
         for(let t=t0; t<=viewEnd()+EPS; t+=stepGrid){
           const x = timeToX(t, cssW);
-          ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
+          ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom);
         }
+        ctx.stroke();
         ctx.setLineDash([]);
       }
 
@@ -1868,36 +1893,45 @@ function updateLyricsHighlight(t){
       }
 
       // Marker + Beschriftungen
+      // Strategie: erst alle Linien in 2 gebatchte Paths (aktiv/inaktiv), dann Pills, dann Text
       if(markers.length>0 && duration>0){
         ctx.font = 'bold 10px ui-sans-serif, system-ui, -apple-system, sans-serif';
         const sorted = markers.filter(m=>!m.playlistClone).slice().sort((a,b)=>a.time-b.time);
         const visible=sorted.filter(m=>m.time>=viewStart-EPS && m.time<=viewEnd()+EPS);
+
+        // Pass 1: Marker-Linien gebatcht nach Farbe (aktiv vs. inaktiv) – nur 2 stroke()-Aufrufe
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        for(const active of [false, true]){
+          const group = visible.filter(m=>m.active===active);
+          if(!group.length) continue;
+          ctx.save();
+          ctx.shadowColor = active ? 'rgba(255,75,75,0.25)' : 'rgba(91,159,255,0.2)';
+          ctx.shadowBlur = 6;
+          ctx.strokeStyle = active ? 'rgba(255,75,75,0.9)' : 'rgba(91,159,255,0.85)';
+          ctx.beginPath();
+          group.forEach(m=>{ const x=timeToX(m.time,cssW); ctx.moveTo(x,waveTop); ctx.lineTo(x,waveBottom); });
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Pass 2: Pills + Labels (müssen pro Marker bleiben wegen individueller Breite)
         visible.forEach(m=>{
           const idx=sorted.findIndex(mm=>mm.id===m.id);
           const labelTop=(idx%2===0);
           const x=timeToX(m.time, cssW);
           const isActive = m.active;
-          const lineColor   = isActive ? 'rgba(255,75,75,0.9)' : 'rgba(91,159,255,0.85)';
           const glowColor   = isActive ? 'rgba(255,75,75,0.25)' : 'rgba(91,159,255,0.2)';
           const bgColor     = isActive ? 'rgba(40,8,8,0.92)' : 'rgba(8,14,30,0.92)';
           const borderColor = isActive ? 'rgba(255,75,75,0.7)' : 'rgba(91,159,255,0.6)';
+          const lineColor   = isActive ? 'rgba(255,75,75,0.9)' : 'rgba(91,159,255,0.85)';
 
-          // Marker line with glow
-          ctx.save();
-          ctx.shadowColor = glowColor; ctx.shadowBlur = 6;
-          ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5;
-          ctx.setLineDash([]);
-          ctx.beginPath(); ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom); ctx.stroke();
-          ctx.restore();
-
-          // Pill label
           const txt=(m.label||'').slice(0,80);
           const pad=6, h=17, r=h/2;
           const w=Math.max(ctx.measureText(txt).width + pad*2, h);
           const lx=Math.min(Math.max(x-w/2,2), cssW-w-2);
           const ly=labelTop?10:(cssH-10-17);
 
-          // Rounded pill background
           ctx.save();
           ctx.shadowColor = glowColor; ctx.shadowBlur = 8;
           ctx.fillStyle = bgColor;
@@ -1913,7 +1947,7 @@ function updateLyricsHighlight(t){
           ctx.fillText(txt, lx+pad, ly+h/2);
           ctx.textBaseline='alphabetic';
 
-          // Small triangle connector
+          // Connector-Linie von Pill zur Waveform
           ctx.save();
           ctx.shadowColor = glowColor; ctx.shadowBlur = 4;
           ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5;
@@ -1930,15 +1964,11 @@ function updateLyricsHighlight(t){
       // Cursor – glowing white playhead
       const cx = timeToX(cursorTime, cssW);
       if(cx>=0 && cx<=cssW){
-        // Cursor line with glow
+        // Cursor line with glow (weißer Solid-Fill – kein Gradient nötig, spart eine Gradient-Erstellung)
         ctx.save();
         ctx.shadowColor = 'rgba(255,255,255,0.6)';
         ctx.shadowBlur = 8;
-        const curGrad = ctx.createLinearGradient(0, waveTop, 0, waveBottom);
-        curGrad.addColorStop(0,   'rgba(255,255,255,0.95)');
-        curGrad.addColorStop(0.5, 'rgba(220,230,255,0.85)');
-        curGrad.addColorStop(1,   'rgba(255,255,255,0.95)');
-        ctx.fillStyle = curGrad;
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
         ctx.fillRect(cx-1, waveTop, 2, waveBottom - waveTop);
         ctx.restore();
 
