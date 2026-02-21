@@ -59,19 +59,24 @@
 </button>
 </div>
 <div class="scene">
-<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /><button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button><select id="langSelect" class="lang-select" aria-label="Language" title="Language"><option value="de">DE</option><option value="en">EN</option></select></div>
+<div class="title-wrap logo-wrap" style="display:flex;justify-content:center;align-items:center;"><img src="logo.png" alt="LoopCake" style="max-width:320px;width:100%;height:auto;display:block" /></div>
 <div class="book" id="book">
 <!-- Linke Seite (bestehende App) -->
 <section class="page left">
 <div class="page-body">
+<div class="top-bar">
+  <button id="autoSaveBtn" class="btn btn-sm toggle" data-i18n-title="btn_autosave_title">Auto-Save: Aus</button>
+  <button id="langSelectBtn" class="btn btn-sm lang-btn" aria-label="Language" title="Language">DE</button>
+  <button id="infoBadge" class="info-badge" aria-label="Info" title="Info"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#90caf9"></circle><rect x="11.1" y="10" width="1.8" height="6" rx="0.9" fill="#1e1e1e"></rect><circle cx="12" cy="7.5" r="1.1" fill="#1e1e1e"></circle></svg></button>
+</div>
 <div class="card stack"><!-- Row 1: Lade/ Speichere Projekt -->
 <div class="grid-2">
-<label class="btn primary" for="loadProjectFile">
+<button class="btn primary" id="loadProjectBtn">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path></svg>
 </span>
           <span data-i18n="btn_load_project">Lade Projekt</span>
-        </label>
+        </button>
 <button class="btn" id="saveProject">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
@@ -82,12 +87,12 @@
 </div>
 <!-- Row 2: Datei laden / Zurücksetzen -->
 <div class="grid-2">
-<label class="btn" for="file">
+<button class="btn" id="loadFileBtn" onclick="document.getElementById('file').click()">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M12 16V4m0 0l3 3m-3-3L9 7M4 20h16" stroke="#90caf9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"></path></svg>
 </span>
           <span data-i18n="btn_load_file">Datei laden</span>
-        </label>
+        </button>
 <button class="btn warn" id="clearBtn">
 <span class="icon">
 <svg fill="none" viewbox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fecaca" stroke-linecap="round" stroke-width="1.8"></path></svg>
@@ -112,7 +117,7 @@
 <!-- Waveform -->
 <div class="section-gap"></div>
 <!-- Trim Controls (neu) -->
-<div class="grid-3" id="trimControls" style="margin-bottom:6px; display:flex; gap:6px; align-items:center; justify-content:flex-start;">
+<div class="grid-3" id="trimControls" style="margin-bottom:6px;">
 <button class="btn btn-sm" id="trimFront" title="Alles vor dem Cursor entfernen" data-i18n="btn_trim_front" data-i18n-title="btn_trim_front_title">Trim Front</button>
 <button class="btn btn-sm" id="trimBack" title="Alles nach dem Cursor entfernen" data-i18n="btn_trim_back" data-i18n-title="btn_trim_back_title">Trim Back</button>
 <button class="btn btn-sm" id="undoTrim" title="Letzten Schnitt rückgängig machen" data-i18n="btn_undo" data-i18n-title="btn_undo_title">Undo</button>
@@ -196,8 +201,7 @@
 <!-- Marker-Liste -->
 <!-- NEU: Reihenfolge-Schalter --><input accept=".mp3,.wav,audio/*" class="file" id="loadAudioForProject" type="file"/>
 </div>
-<div class="v-gap"></div>
-<div id="exportWrap" style="display:block;">
+<div id="exportWrap" style="display:block; margin-top:10px;">
   <button class="btn big" id="exportWavBtn" title="Arrangement als WAV exportieren" data-i18n="btn_export_wav" data-i18n-title="btn_export_wav_title">Arrangement als WAV exportieren</button>
 </div>
 <div id="exportStatus" class="note-hint" style="display:none; text-align:center; margin-top:6px;">Export … 0%</div>
@@ -211,11 +215,7 @@
 <button class="btn toggle" id="toggleAutoscroll" title="Automatisches Scrollen ein/aus" data-i18n="btn_autoscroll_on" data-i18n-title="btn_autoscroll_title">Autoscroll: An</button>
 <button class="btn toggle" id="importMarkersBtn" title="Custom Arrangement in Editor übernehmen" data-i18n="btn_import_markers" data-i18n-title="btn_import_markers_title">Custom Arrangement übernehmen</button>
 <div class="segment segment-reim-popups"><label class="label" style="margin-left:8px;" data-i18n="label_rhyme_popups">Reim-Popups</label>
-<select class="field" id="rhymeMode" style="display:inline-block; width:auto; padding:8px 10px;">
-<option selected="" value="off" data-i18n="rhyme_opt_off">Aus</option>
-<option value="de" data-i18n="rhyme_opt_de">Deutsch</option>
-<option value="en" data-i18n="rhyme_opt_en">Englisch</option>
-</select><button aria-label="Hilfe zum Loopcake Editor" class="help-badge" id="editorHelp" title="Hilfe" data-i18n-aria="btn_editor_help_aria" data-i18n-title="btn_help_title">
+<button class="btn btn-sm" id="rhymeModeBtn" style="min-width:52px;">Aus</button><button aria-label="Hilfe zum Loopcake Editor" class="help-badge" id="editorHelp" title="Hilfe" data-i18n-aria="btn_editor_help_aria" data-i18n-title="btn_help_title">
   <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="10" fill="#90caf9"></circle>
     <path d="M9.6 9.3a2.4 2.4 0 1 1 3.9 1.8c-.8.6-1.2 1-1.2 2" stroke="#1e1e1e" stroke-linecap="round" stroke-width="1.8"></path>
@@ -364,6 +364,115 @@ Deine fertigen Lyrics kannst du dir mit dem Export Button vollständig anzeigen 
     </div>
     <div class="modal-footer">
       <button class="btn btn-sm btn-close" id="editorHelpClose2" title="Schließen" type="button" data-i18n="btn_close" data-i18n-title="btn_close">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Bestätigungs-Modal (z.B. Projekt löschen) ===== -->
+<div class="modal-backdrop" id="confirmModal" style="display:none;">
+  <div class="modal-card" style="max-width:360px;">
+    <div class="modal-header">
+      <div class="modal-title" id="confirmModalTitle"></div>
+    </div>
+    <div class="modal-body" style="display:block; padding: 4px 0 8px;">
+      <p id="confirmModalText" style="margin:0; color:var(--text-dim); font-size:14px; line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm" id="confirmModalCancel" data-i18n="btn_cancel">Abbrechen</button>
+      <button class="btn warn" id="confirmModalOk" data-i18n="btn_delete">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Eingabe-Modal (Marker setzen / umbenennen) ===== -->
+<div class="modal-backdrop" id="inputModal" style="display:none;">
+  <div class="modal-card" style="max-width:360px;">
+    <div class="modal-header">
+      <div class="modal-title" id="inputModalTitle"></div>
+      <button class="btn btn-sm" id="inputModalClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body" style="display:block;">
+      <input class="field" id="inputModalField" type="text" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-sm" id="inputModalCancel" data-i18n="btn_cancel">Abbrechen</button>
+      <button class="btn primary" id="inputModalConfirm" data-i18n="btn_ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Android: Projekt überschreiben oder neu? ===== -->
+<div class="modal-backdrop" id="androidSaveChoiceModal" style="display:none;">
+  <div class="modal-card" style="max-width:360px;">
+    <div class="modal-header">
+      <div class="modal-title" data-i18n="modal_save_project_title">Projekt speichern</div>
+      <button class="btn btn-sm" id="androidSaveChoiceClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body" style="display:block; padding:4px 0 8px;">
+      <p id="androidSaveChoiceText" style="margin:0; color:var(--text-dim); font-size:14px; line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer" style="gap:8px;">
+      <button class="btn btn-sm" id="androidSaveChoiceNew" data-i18n="js_save_as_new">Neues Projekt</button>
+      <button class="btn warn" id="androidSaveChoiceOverwrite" data-i18n="js_overwrite">Überschreiben</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Android: Projekt speichern ===== -->
+<div class="modal-backdrop" id="androidSaveModal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" data-i18n="modal_save_project_title">Projekt speichern</div>
+      <button class="btn btn-sm" id="androidSaveModalClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body">
+      <div class="label" style="margin-bottom:8px;" data-i18n="label_project_name">Projektname</div>
+      <input class="field" id="androidSaveNameInput" type="text" data-i18n-placeholder="label_project_name_placeholder" placeholder="Mein Projekt" style="width:100%;box-sizing:border-box;" autocomplete="off" spellcheck="false"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" id="androidSaveConfirmBtn" data-i18n="btn_save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Android: Projekt laden ===== -->
+<div class="modal-backdrop" id="androidLoadModal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" data-i18n="modal_load_project_title">Gespeicherte Projekte</div>
+      <button class="btn btn-sm" id="androidLoadModalClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div id="androidProjectList" style="max-height:55vh;overflow-y:auto;padding:0 16px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Rhyme Popup Mode Picker ===== -->
+<div class="modal-backdrop" id="rhymeModeModal" style="display:none;">
+  <div class="modal-card" style="max-width:300px;">
+    <div class="modal-header">
+      <div class="modal-title" data-i18n="label_rhyme_popups">Reim-Popups</div>
+      <button class="btn btn-sm" id="rhymeModeModalClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body" style="display:flex;gap:10px;justify-content:center;padding:20px 16px;">
+      <button class="btn" id="rhymeOptOff" style="flex:1;" data-i18n="rhyme_opt_off">Aus</button>
+      <button class="btn" id="rhymeOptDe"  style="flex:1;" data-i18n="rhyme_opt_de">Deutsch</button>
+      <button class="btn" id="rhymeOptEn"  style="flex:1;" data-i18n="rhyme_opt_en">Englisch</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Sprache / Language Picker ===== -->
+<div class="modal-backdrop" id="langModal" style="display:none;">
+  <div class="modal-card" style="max-width:280px;">
+    <div class="modal-header">
+      <div class="modal-title" data-i18n="modal_lang_title">Sprache</div>
+      <button class="btn btn-sm" id="langModalClose" data-i18n="btn_close">Schließen</button>
+    </div>
+    <div class="modal-body" style="display:flex;gap:12px;justify-content:center;padding:20px 16px;">
+      <button class="btn" id="langOptDe" style="flex:1;font-size:15px;" data-i18n="lang_opt_de">Deutsch</button>
+      <button class="btn" id="langOptEn" style="flex:1;font-size:15px;" data-i18n="lang_opt_en">Englisch</button>
     </div>
   </div>
 </div>

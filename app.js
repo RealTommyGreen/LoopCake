@@ -2,7 +2,14 @@
 
 /* ========== i18n System ========== */
 var _translations = {};
-var _lang = (function(){ try{ return localStorage.getItem('lc_lang') || 'de'; }catch(_){ return 'de'; } })();
+var _lang = (function(){
+  try {
+    var saved = localStorage.getItem('lc_lang');
+    if (saved) return saved;
+    var sys = (navigator.language || navigator.userLanguage || 'en').slice(0, 2).toLowerCase();
+    return sys === 'de' ? 'de' : 'en';
+  } catch(_) { return 'en'; }
+})();
 
 function _t(key) {
   return (_translations[key] !== undefined) ? _translations[key] : key;
@@ -31,9 +38,18 @@ function applyTranslations() {
   });
   // Update html lang attribute
   document.documentElement.lang = _lang;
-  // Update lang selector to reflect current language
-  var sel = document.getElementById('langSelect');
-  if (sel) sel.value = _lang;
+  // Update lang button label
+  var langBtn = document.getElementById('langSelectBtn');
+  if (langBtn) langBtn.textContent = _lang.toUpperCase();
+  // Update auto-save button label
+  var asbtn = document.getElementById('autoSaveBtn');
+  if (asbtn) asbtn.textContent = _autoSaveEnabled ? _t('btn_autosave_on') : _t('btn_autosave_off');
+  // Update rhyme mode button label (text depends on language)
+  var rhymeBtn2 = document.getElementById('rhymeModeBtn');
+  if (rhymeBtn2) {
+    var rm = (typeof window.RHYME_MODE !== 'undefined') ? window.RHYME_MODE : 'off';
+    rhymeBtn2.textContent = _t('rhyme_opt_' + rm);
+  }
 }
 
 function loadLanguage(lang) {
@@ -53,15 +69,112 @@ function loadLanguage(lang) {
 // Bootstrap: load saved language on startup
 loadLanguage(_lang);
 
-// Language selector handler (runs after DOM ready since app.js is defer)
+// Language picker handler (runs after DOM ready since app.js is defer)
 (function() {
-  var sel = document.getElementById('langSelect');
-  if (!sel) return;
-  sel.value = _lang;
-  sel.addEventListener('change', function() {
-    loadLanguage(sel.value);
+  var btn     = document.getElementById('langSelectBtn');
+  var modal   = document.getElementById('langModal');
+  var closeBtn= document.getElementById('langModalClose');
+  var optDe   = document.getElementById('langOptDe');
+  var optEn   = document.getElementById('langOptEn');
+  if (!btn || !modal) return;
+
+  function updateActive() {
+    if (optDe) optDe.classList.toggle('primary', _lang === 'de');
+    if (optEn) optEn.classList.toggle('primary', _lang === 'en');
+  }
+
+  btn.addEventListener('click', function() {
+    updateActive();
+    modal.style.display = 'flex';
   });
+
+  function pickLang(lang) {
+    loadLanguage(lang);
+    modal.style.display = 'none';
+  }
+
+  if (optDe) optDe.addEventListener('click', function() { pickLang('de'); });
+  if (optEn) optEn.addEventListener('click', function() { pickLang('en'); });
+  if (closeBtn) closeBtn.addEventListener('click', function() { modal.style.display = 'none'; });
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
 })();
+
+/* ---------- Auto-Save ---------- */
+// Standard: AUS. Wird automatisch eingeschaltet, sobald der User ein Projekt
+// speichert oder lädt. Kein localStorage – Zustand folgt dem Projekt-Lebenszyklus.
+var _autoSaveEnabled = false;
+var _autoSaveDirtyTimer = null;
+
+function _autoSaveNow() {
+  if (!_autoSaveEnabled || !_currentProjectName || !window.Android) return;
+  var fi = document.getElementById('fileInfo');
+  if (!fi || fi.textContent === '–' || fi.textContent === '') return;
+  var doSave = function() {
+    try {
+      var jsonStr = JSON.stringify(currentProject());
+      Android.saveProject(_currentProjectName, jsonStr, '', '');
+    } catch(e) { console.warn('[AutoSave]', e); }
+  };
+  // requestIdleCallback: nur im Browser-Leerlauf → kein Einfluss auf Playback
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(doSave, { timeout: 15000 });
+  } else {
+    setTimeout(doSave, 0);
+  }
+}
+
+// Änderungs-Signal: 3 s Debounce, dann im Leerlauf speichern.
+// Wird von allen relevanten Änderungsquellen aufgerufen.
+function _markDirty() {
+  if (!_autoSaveEnabled || !_currentProjectName || !window.Android) return;
+  if (_autoSaveDirtyTimer) clearTimeout(_autoSaveDirtyTimer);
+  _autoSaveDirtyTimer = setTimeout(function() {
+    _autoSaveDirtyTimer = null;
+    _autoSaveNow();
+  }, 3000);
+}
+
+function _setAutoSave(enabled) {
+  _autoSaveEnabled = enabled;
+  var btn = document.getElementById('autoSaveBtn');
+  if (btn) {
+    btn.textContent = enabled ? _t('btn_autosave_on') : _t('btn_autosave_off');
+    btn.classList.toggle('active', enabled);
+  }
+}
+
+(function() {
+  var btn = document.getElementById('autoSaveBtn');
+  if (!btn) return;
+  _setAutoSave(false); // immer mit OFF starten
+  btn.addEventListener('click', function() { _setAutoSave(!_autoSaveEnabled); });
+})();
+
+/* ---------- Android: Sticky-Focus nach Touch entfernen ---------- */
+document.addEventListener('touchend', function() {
+  setTimeout(function() {
+    var el = document.activeElement;
+    // contentEditable-Elemente (Lyrics-Zeilen) NICHT wegblutten –
+    // sonst klappt das Keyboard nie zuverlässig auf.
+    if (el && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA'
+        && el !== document.body && !el.isContentEditable) {
+      el.blur();
+    }
+  }, 0);
+}, { passive: true });
+
+/* ---------- Toast-Notification ---------- */
+function _showToast(msg) {
+  var t = document.createElement('div');
+  t.className = 'lc-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(function() { t.classList.add('lc-toast--in'); });
+  setTimeout(function() {
+    t.classList.remove('lc-toast--in');
+    t.addEventListener('transitionend', function() { t.remove(); }, { once: true });
+  }, 2200);
+}
 
 /* ---------- WebAudio: einmalige Normalisierung (inkl. Safari-Fallback) ---------- */
 window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -721,23 +834,63 @@ updateTempoUI();
 // --- Rechter Editor DOM ---
     const lyricsListEl = document.getElementById('lyricsList');
     const linesInfoEl = document.getElementById('linesInfo');
+
+    // Flag: gesetzt solange der User den Lyrics-Bereich berührt →
+    // unterdrückt scrollIntoView() während Playback, damit Touches ankommen.
+    if (lyricsListEl) {
+      lyricsListEl.addEventListener('touchstart', function() {
+        window._lyricsTouchActive = true;
+      }, { passive: true });
+      lyricsListEl.addEventListener('touchend', function() {
+        setTimeout(function() { window._lyricsTouchActive = false; }, 400);
+      }, { passive: true });
+      lyricsListEl.addEventListener('touchcancel', function() {
+        window._lyricsTouchActive = false;
+      }, { passive: true });
+    }
     const importMarkersBtn = document.getElementById('importMarkersBtn');
     const exportTxtBtn = document.getElementById('exportTxtBtn');
     const toggleAutoscrollBtn = document.getElementById('toggleAutoscroll');
     
     // --- RhymeBrain Mode (off/de/en) ---
-    const rhymeModeSelect = document.getElementById('rhymeMode');
+    const rhymeModeBtn   = document.getElementById('rhymeModeBtn');
+    const rhymeModeModal = document.getElementById('rhymeModeModal');
+
+    function _updateRhymeBtnLabel() {
+      if (!rhymeModeBtn) return;
+      const m = window.RHYME_MODE || 'off';
+      rhymeModeBtn.textContent = _t('rhyme_opt_' + m);
+      ['Off','De','En'].forEach(s => {
+        const el = document.getElementById('rhymeOpt' + s);
+        if (el) el.classList.toggle('primary', m === s.toLowerCase());
+      });
+    }
+
     (function initRhymeMode(){
       const saved = (typeof localStorage!=='undefined') ? localStorage.getItem('rhymeMode') : null;
       const mode = (saved === 'off' || saved === 'en' || saved === 'de') ? saved : 'off';
       window.RHYME_MODE = mode;
-      if (rhymeModeSelect) rhymeModeSelect.value = mode;
+      _updateRhymeBtnLabel();
     })();
-    rhymeModeSelect?.addEventListener('change', () => {
-      const v = rhymeModeSelect.value;
+
+    function _setRhymeMode(v) {
       window.RHYME_MODE = (v === 'off' || v === 'en') ? v : 'de';
       try { localStorage.setItem('rhymeMode', window.RHYME_MODE); } catch(_) {}
-    });
+      _updateRhymeBtnLabel();
+      if (rhymeModeModal) rhymeModeModal.style.display = 'none';
+    }
+
+    if (rhymeModeBtn && rhymeModeModal) {
+      rhymeModeBtn.addEventListener('click', () => {
+        _updateRhymeBtnLabel();
+        rhymeModeModal.style.display = 'flex';
+      });
+      rhymeModeModal.addEventListener('click', e => { if (e.target === rhymeModeModal) rhymeModeModal.style.display = 'none'; });
+    }
+    document.getElementById('rhymeModeModalClose')?.addEventListener('click', () => { if (rhymeModeModal) rhymeModeModal.style.display = 'none'; });
+    document.getElementById('rhymeOptOff')?.addEventListener('click', () => _setRhymeMode('off'));
+    document.getElementById('rhymeOptDe')?.addEventListener('click',  () => _setRhymeMode('de'));
+    document.getElementById('rhymeOptEn')?.addEventListener('click',  () => _setRhymeMode('en'));
 
     // --- Tap-to-BPM ---
     const tapBpmBtn = document.getElementById('tapBpm');
@@ -952,6 +1105,7 @@ updateTempoUI();
         return;
       }
       restoreEditorState(snap);
+      _markDirty();
     }
 
     undoTrimBtn?.addEventListener('click', undoTrim);
@@ -990,7 +1144,7 @@ updateTempoUI();
       if(!startM || !endM){
         markers = markers.filter(m=>!m.pin); // alles außer pins behalten, dann frisch anlegen
         markers.unshift({ id: uid(), time: 0, label: 'Start', active: true,  pin: 'start', listOrder: 0, seqReps: 1 });
-        markers.push({ id: uid(), time: duration, label: 'Ende', active: true,  pin: 'end', listOrder: 1 });
+        markers.push({ id: uid(), time: duration, label: _t('js_marker_end_label'), active: true,  pin: 'end', listOrder: 1 });
       }else{
         startM.time = 0;
         endM.time = duration;
@@ -1070,6 +1224,7 @@ function trimAtCursorFront(){
       // Cursor an den Anfang
       setCursor(0, true);
       draw();
+      _markDirty();
     }
 
     function trimAtCursorBack(){
@@ -1103,6 +1258,7 @@ function trimAtCursorFront(){
       // Cursor ans neue Ende snappen
       setCursor(duration, true);
       draw();
+      _markDirty();
     }
 
     trimFrontBtn?.addEventListener('click', trimAtCursorFront);
@@ -1371,11 +1527,14 @@ function getLoopRegion(){
 
   draw();
   updateLyricsHighlight(cursorTime);
-      updateMarkerRowHighlight(cursorTime);
+  updateMarkerRowHighlight(cursorTime);
+  if (wasPlaying) {
+    try { if (typeof Android !== 'undefined') Android.setPlaybackState(false, ''); } catch(_) {}
+  }
 }
 
   function startEngineAt(offset){
-  if(!audioBuffer) return alert(_t('js_no_audio'));
+  if(!audioBuffer) return _showToast(_t('js_no_audio'));
   ensureAC();
 
   if(engineSource){ try{engineSource.stop();}catch(_){} try{engineSource.disconnect();}catch(_){} }
@@ -1423,9 +1582,19 @@ function getLoopRegion(){
   usingEngine = true;
   startPump();
   updateLyricsHighlight(startAt);
+  try {
+    if (typeof Android !== 'undefined') {
+      var _notifTitle = (typeof fileInfo !== 'undefined' && fileInfo && fileInfo.textContent && fileInfo.textContent !== '–') ? fileInfo.textContent : 'LoopCake';
+      Android.setPlaybackState(true, _notifTitle);
+    }
+  } catch(_) {}
 }
 
     function restartEngineAt(t){ if(!audioBuffer) return; startEngineAt(t); }
+
+    // Exposed for Android media notification buttons
+    window._mediaPlay = function() { if (!usingEngine && audioBuffer) startEngineAt(cursorTime); };
+    window._mediaStop = function() { if (usingEngine) stopEngine(); };
 
     function resumeWithUpdatedLoopPreservingPhase(){
       if(!usingEngine){ draw(); updateLyricsHighlight(cursorTime);
@@ -1580,8 +1749,8 @@ idx.addEventListener('pointercancel', ()=>{
 });
 
         const line = document.createElement('div'); line.className = 'line'; line.contentEditable = 'true'; line.spellcheck = false;
-        line.textContent = lyrics[i] || '';
-        line.addEventListener('input', ()=>{ lyrics[i] = line.textContent; });
+        line.innerText = lyrics[i] || '';
+        line.addEventListener('input', ()=>{ lyrics[i] = line.innerText; _markDirty(); });
         row.appendChild(idx); row.appendChild(line);
         lyricsListEl.appendChild(row);
       }
@@ -1618,8 +1787,8 @@ idx.addEventListener('pointercancel', ()=>{
             line.className = 'line';
             line.contentEditable = 'true';
             line.spellcheck = false;
-            line.textContent = lineContent;
-            line.addEventListener('input', ()=>{ group.lines[lineJ] = line.textContent; });
+            line.innerText = lineContent;
+            line.addEventListener('input', ()=>{ group.lines[lineJ] = line.innerText; _markDirty(); });
 
             row.appendChild(delBtn);
             row.appendChild(line);
@@ -1646,7 +1815,7 @@ function ensureDefaultStartEndMarkers() {
   if (!Number.isFinite(duration) || duration <= 0) return;
   if (Array.isArray(markers) && markers.length === 0) {
     const startM = { id: uid(), time: 0, label: 'Start', active: true,  pin: 'start', listOrder: 0, seqReps: 1 };
-    const endM   = { id: uid(), time: duration, label: 'Ende',  active: true,  pin: 'end', listOrder: 1 };
+    const endM   = { id: uid(), time: duration, label: _t('js_marker_end_label'),  active: true,  pin: 'end', listOrder: 1 };
     markers.push(startM, endM);
     reindexListOrder();
     // Sicherheitshalber konsistent halten
@@ -1669,7 +1838,7 @@ function ensureDefaultStartEndMarkers() {
       if(lastActiveLine>=0 && rows[lastActiveLine]) rows[lastActiveLine].classList.remove('active');
       if(idx>=0 && rows[idx]) rows[idx].classList.add('active');
       lastActiveLine = idx;
-      if(idx>=0 && book.classList.contains('flipped') && autoScrollEnabled){
+      if(idx>=0 && book.classList.contains('flipped') && autoScrollEnabled && !window._lyricsTouchActive){
         rows[idx].scrollIntoView({ block:'center', behavior:'smooth' });
       }
     }
@@ -1941,20 +2110,67 @@ function updateLyricsHighlight(t){
         }
       }
 
-      // Raster (2-Takt-Linien) – alles in EINEN gestrichelten Path gebatcht
-      const stepGrid = gridStep();
-      if(duration>0 && stepGrid>0){
-        ctx.strokeStyle='rgba(91,159,255,0.35)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
-        ctx.beginPath();
-        const t0 = Math.ceil((viewStart - EPS) / stepGrid) * stepGrid;
-        for(let t=t0; t<=viewEnd()+EPS; t+=stepGrid){
-          const x = timeToX(t, cssW);
-          ctx.moveTo(x, waveTop); ctx.lineTo(x, waveBottom);
-        }
-        ctx.stroke();
+      // === Raster: Major (Taktanfang) + Minor (Beats) ===
+      // Kein Dash – solide Linien, leicht eingerückt von Ober-/Unterkante.
+      const bl = barLen();
+      if(duration > 0 && bl > 0){
         ctx.setLineDash([]);
+        const GRID_TOP    = waveTop    + 3;
+        const GRID_BOTTOM = waveBottom - 3;
+
+        // Minor Grid (Beats): ein Beat = bl / beatsPerBar
+        // Nur zeichnen wenn Beats mindestens 6 px auseinander liegen (kein Brei).
+        const beatStep  = bl / beatsPerBar;
+        const pxPerBeat = cssW * beatStep / viewDur;
+        if(beatStep > 0 && pxPerBeat >= 6){
+          const bStart = Math.ceil((viewStart - EPS) / beatStep) * beatStep;
+          ctx.strokeStyle = 'rgba(91,159,255,0.11)';
+          ctx.lineWidth   = 0.75;
+          ctx.beginPath();
+          for(let t = bStart; t <= viewEnd() + EPS; t += beatStep){
+            // Taktanfänge überspringen – die kommen als Major
+            if(Math.abs(t / bl - Math.round(t / bl)) < 1e-4) continue;
+            const x = timeToX(t, cssW);
+            ctx.moveTo(x, GRID_TOP); ctx.lineTo(x, GRID_BOTTOM);
+          }
+          ctx.stroke();
+        }
+
+        // Major Grid (Taktanfänge, ohne Snap-Positionen): sichtbar ab 2 px/Takt
+        const pxPerBar = cssW * bl / viewDur;
+        const stepGrid = gridStep(); // = bl * 2 → Snap-Positionen
+        if(pxPerBar >= 2){
+          const mStart = Math.ceil((viewStart - EPS) / bl) * bl;
+          ctx.strokeStyle = 'rgba(91,159,255,0.28)';
+          ctx.lineWidth   = 1.5;
+          ctx.beginPath();
+          for(let t = mStart; t <= viewEnd() + EPS; t += bl){
+            // Snap-Positionen überspringen – die werden heller als eigene Ebene gezeichnet
+            if(Math.abs(t / stepGrid - Math.round(t / stepGrid)) < 1e-4) continue;
+            const x = timeToX(t, cssW);
+            ctx.moveTo(x, GRID_TOP); ctx.lineTo(x, GRID_BOTTOM);
+          }
+          ctx.stroke();
+        }
+
+        // Snap Grid (alle gridStep() = 2 Takte): hellste Ebene, Glow-Effekt
+        const pxPerSnap = cssW * stepGrid / viewDur;
+        if(pxPerSnap >= 2){
+          const sStart = Math.ceil((viewStart - EPS) / stepGrid) * stepGrid;
+          // Äußerer Glow: breit + transparent
+          ctx.shadowColor = 'rgba(91,159,255,0.45)';
+          ctx.shadowBlur  = 4;
+          ctx.strokeStyle = 'rgba(140,195,255,0.65)';
+          ctx.lineWidth   = 1.5;
+          ctx.beginPath();
+          for(let t = sStart; t <= viewEnd() + EPS; t += stepGrid){
+            const x = timeToX(t, cssW);
+            ctx.moveTo(x, GRID_TOP); ctx.lineTo(x, GRID_BOTTOM);
+          }
+          ctx.stroke();
+          ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+        }
+        ctx.lineWidth = 1;
       }
 
       // Loop-Füllung
@@ -2159,7 +2375,7 @@ function updateLyricsHighlight(t){
         const isDouble=(lastTapId===m.id && tapTimer && (now - tapTimer.time) < 300);
         if(isDouble){
           clearTimeout(tapTimer.handle); tapTimer=null; lastTapId=null;
-          const name=prompt(_t('js_rename_marker_prompt'), m.label||''); if(name!==null){ m.label=name; renderMarkerList(); draw(); }
+          _showInputModal(_t('js_rename_marker_prompt'), m.label||'', (name) => { if(name!==null){ m.label=name; renderMarkerList(); draw(); } });
         }else{
           tapTimer={ time:now, handle:setTimeout(()=>{
             m.active=!m.active; if(m.active) ensureMaxTwoActive(m);
@@ -2349,16 +2565,14 @@ function updateLyricsHighlight(t){
     }
 
     saveProjectBtn?.addEventListener('click', ()=>{
-      const defaultBase = (loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'projekt');
-      let name = prompt(_t('js_prompt_project_name'), `${defaultBase}_session`);
-      if(name===null) return;
-      name = (name.trim() || 'projekt');
-      if(!/\.json$/i.test(name)) name += '.json';
-      const data = JSON.stringify(currentProject());
-      if (window.Android && Android.saveProject) {
-        try { Android.saveProject(data, name); }
-        catch(e){ alert(_t('js_err_android')+e); }
+      if (window.Android) {
+        _androidShowSaveDialog();
       } else {
+        const defaultBase = (loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'projekt');
+        let name = prompt(_t('js_prompt_project_name'), `${defaultBase}_session`);
+        if(name===null) return;
+        name = (name.trim() || 'projekt');
+        if(!/\.json$/i.test(name)) name += '.json';
         downloadJson(currentProject(), name);
       }
     });loadProjectInput?.addEventListener('change', async e=>{
@@ -2507,7 +2721,7 @@ cursorTime = +json.cursorTime || 0;
               if(!sM || !eM){
                 markers = (markers||[]).filter(m=>!m.pin);
                 markers.unshift({ id: uid(), time: 0, label: 'Start', active: true, pin:'start', listOrder: 0, seqReps:1 });
-                markers.push({ id: uid(), time: duration, label: 'Ende', active: true, pin:'end', listOrder: (markers.length) });
+                markers.push({ id: uid(), time: duration, label: _t('js_marker_end_label'), active: true, pin:'end', listOrder: (markers.length) });
               }else{ sM.time = 0; eM.time = duration; }
               // Reset view
               minView = Math.max(0.25, gridStep()/4);
@@ -2600,7 +2814,7 @@ try{
       if(!sM || !eM){
         markers = (markers||[]).filter(m=>!m.pin);
         markers.unshift({ id: uid(), time: 0, label: 'Start', active: true, pin:'start', listOrder: 0, seqReps:1 });
-        markers.push({ id: uid(), time: duration, label: 'Ende', active: true, pin:'end', listOrder: (markers.length) });
+        markers.push({ id: uid(), time: duration, label: _t('js_marker_end_label'), active: true, pin:'end', listOrder: (markers.length) });
       }else{ sM.time = 0; eM.time = duration; }
       // Reset view
       minView = Math.max(0.25, gridStep()/4);
@@ -3027,15 +3241,18 @@ row.appendChild(handle);
     markerListEl.appendChild(row);
   });
   try{ updateMarkerRowHighlight(cursorTime); }catch(_){}
+  _markDirty();
 }
 // --- Buttons ---
     addMarkerBtn.addEventListener('click', ()=>{
-  if(duration<=0) return alert(_t('js_no_audio'));
-  const name = prompt(_t('js_marker_prompt')); if(name===null) return;
+  if(duration<=0) return _showToast(_t('js_no_audio'));
   const t = cursorTime;
-  const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false, seqReps: 1 };
-  insertMarkerAscending(newM);
-  renderMarkerList(); draw();
+  _showInputModal(_t('js_marker_prompt'), '', (name) => {
+    if(name===null) return;
+    const newM = { id: uid(), time: clamp(snapToGrid(t),0,duration), label: name, active: false, seqReps: 1 };
+    insertMarkerAscending(newM);
+    renderMarkerList(); draw();
+  });
 });
 
     deleteMarkerBtn.addEventListener('click', ()=>{
@@ -3059,6 +3276,26 @@ row.appendChild(handle);
     // Floating play/stop buttons mirror behavior
     document.getElementById('floatPlay')?.addEventListener('click', async ()=>{ await ensureACResumed(); startEngineAt(cursorTime); });
     document.getElementById('floatStop')?.addEventListener('click', ()=>{ stopEngine(); });
+
+    // Reliable press animation for FABs — CSS :active is unreliable on Android WebView
+    (function(){
+      function wirePressAnim(el) {
+        if (!el) return;
+        let timer = null;
+        el.addEventListener('touchstart', () => {
+          clearTimeout(timer);
+          el.classList.add('pressing');
+        }, { passive: true });
+        const release = () => {
+          // Minimum 130ms visibility so even quick taps are perceived
+          timer = setTimeout(() => el.classList.remove('pressing'), 130);
+        };
+        el.addEventListener('touchend',    release,                                    { passive: true });
+        el.addEventListener('touchcancel', () => el.classList.remove('pressing'), { passive: true });
+      }
+      wirePressAnim(document.getElementById('floatPlay'));
+      wirePressAnim(document.getElementById('floatStop'));
+    })();
 
     // Stop-Button: Double-Tap → Cursor zum Loop-Anfang springen
     // - Custom Arrangement aktiv? → erster Marker in Listenreihenfolge
@@ -3410,20 +3647,22 @@ function _showCloneDeleteDialog(m){
   backdrop.innerHTML = `
     <div class="modal-card" style="max-width:360px" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <div class="modal-title">Kopiespur löschen</div>
+        <div class="modal-title">${_t('modal_clone_delete_title')}</div>
       </div>
       <div class="modal-body" style="padding:8px 0;font-size:14px;color:#e2e2e2;line-height:1.5;">
-        Achtung, Zeilen enthalten Text, auch löschen?
+        ${_t('modal_clone_delete_text')}
       </div>
       <div class="modal-footer" style="gap:10px;">
-        <button class="btn" id="_dcd_ja">Ja</button>
-        <button class="btn" id="_dcd_nein">Nein</button>
+        <button class="btn btn-sm" id="_dcd_cancel">${_t('btn_cancel')}</button>
+        <button class="btn" id="_dcd_nein">${_t('btn_no')}</button>
+        <button class="btn warn" id="_dcd_ja">${_t('btn_yes')}</button>
       </div>
     </div>`;
   document.body.appendChild(backdrop);
   function close(){ backdrop.remove(); }
   backdrop.querySelector('#_dcd_ja').addEventListener('click', ()=>{ close(); _deleteCloneMarker(m, false); });
   backdrop.querySelector('#_dcd_nein').addEventListener('click', ()=>{ close(); _deleteCloneMarker(m, true); });
+  backdrop.querySelector('#_dcd_cancel').addEventListener('click', ()=>{ close(); });
   backdrop.addEventListener('click', e=>{ if(e.target === backdrop) close(); });
 }
 
@@ -3578,8 +3817,9 @@ function encodeWavFromBuffer(buf){
   return new Blob([ab], { type: 'audio/wav' });
 }
 
-async function exportArrangementWav(){
-  if(!audioBuffer || !duration){ alert(_t('js_no_audio')); return; }
+async function exportArrangementWav(userFilename){
+  if(!audioBuffer || !duration){ _showToast(_t('js_no_audio')); return; }
+  let _savedByAndroid = false;
   try{
     if(exportStatus){ exportStatus.style.display = 'block'; exportStatus.textContent = _t('js_export_preparing'); }
     if(exportWavBtn){ exportWavBtn.disabled = true; exportWavBtn.textContent = _t('js_export_exporting'); }
@@ -3699,46 +3939,105 @@ async function exportArrangementWav(){
     // Android bridge save if available
 
     const base = (typeof loadedFileMeta !== 'undefined' && loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'track');
-    const filename = `${base}-arrangement.wav`;
-    if (window.Android && Android.saveWavBase64) {
-      try {
-        if(exportStatus){ exportStatus.textContent = _t('js_export_saving'); }
-        const buf = await blob.arrayBuffer();
-        let binary = '';
-        const bytes = new Uint8Array(buf);
-        const chunk = 0x8000;
-        for(let i=0;i<bytes.length;i+=chunk){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk)); }
-        const b64 = btoa(binary);
-        Android.saveWavBase64(b64, filename);
-        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
-      } catch(e) {
-        console.warn('Android saveWavBase64 failed, falling back to download', e);
-        const a = document.createElement('a');
-        a.download = filename;
-        a.href = URL.createObjectURL(blob);
-        a.style.display = 'none'; document.body.appendChild(a); a.click();
-        setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
-      }
+    const filename = userFilename || `${base}-arrangement.wav`;
+    if (window.Android && typeof Android.saveWavBase64 === 'function') {
+      if(exportStatus){ exportStatus.textContent = _t('js_export_saving'); }
+      const buf = await blob.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buf);
+      const chunk = 0x8000;
+      for(let i=0;i<bytes.length;i+=chunk){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk)); }
+      const b64 = btoa(binary);
+      Android.saveWavBase64(b64, filename);
+      // Button + Status werden durch den _onWavSaved-Callback wiederhergestellt
+      _savedByAndroid = true;
     } else {
-        const a = document.createElement('a');
-        a.download = filename;
-        a.href = URL.createObjectURL(blob);
-        a.style.display = 'none'; document.body.appendChild(a); a.click();
-        setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = URL.createObjectURL(blob);
+      a.style.display = 'none'; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      if(exportStatus){ exportStatus.textContent = _t('js_export_done'); }
     }
 
-} catch(err){
+  } catch(err){
     console.warn('Export WAV failed:', err);
     alert(_t('js_export_failed') + (err && err.message ? err.message : err));
     if(exportStatus){ exportStatus.style.display = 'none'; }
   } finally {
-    if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = _t('js_export_btn_label'); }
+    if(!_savedByAndroid){
+      if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = _t('js_export_btn_label'); }
+    }
   }
 }
 
-if(exportWavBtn){ exportWavBtn.addEventListener('click', exportArrangementWav); }
+// Callback von Android nach dem SAF-Speichern (Erfolg oder Abbruch)
+window._onWavSaved = function(success) {
+  if(exportStatus){
+    if(success){
+      exportStatus.textContent = _t('js_export_done');
+    } else {
+      exportStatus.textContent = 'Export abgebrochen.';
+      setTimeout(()=>{ if(exportStatus) exportStatus.style.display = 'none'; }, 3000);
+    }
+  }
+  if(exportWavBtn){ exportWavBtn.disabled = false; exportWavBtn.textContent = _t('js_export_btn_label'); }
+};
+
+// Zeigt den Dateiname-Dialog vor dem Export
+function _showWavExportDialog() {
+  if(!audioBuffer || !duration){ _showToast(_t('js_no_audio')); return; }
+  const base = (typeof loadedFileMeta !== 'undefined' && loadedFileMeta && loadedFileMeta.name
+    ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : 'track');
+  const defaultStem = `${base}-arrangement`;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.style.cssText = 'display:flex;z-index:200000;';
+  backdrop.innerHTML = `
+    <div class="modal-card" style="max-width:360px" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title">${_t('modal_wav_export_title')}</div>
+      </div>
+      <div class="modal-body" style="flex-direction:column;width:100%;padding:12px 0 4px;">
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--muted);margin-bottom:8px;">${_t('modal_wav_export_filename_label')}</label>
+        <div style="display:flex;align-items:center;gap:0;width:100%;">
+          <input id="_wav_name_input" type="text" value="${defaultStem}"
+            style="flex:1;min-width:0;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius) 0 0 var(--radius);padding:10px 12px;font-size:14px;color:var(--text);outline:none;transition:border-color .15s;">
+          <span style="background:var(--panel);border:1px solid var(--line);border-left:none;border-radius:0 var(--radius) var(--radius) 0;padding:10px 12px;font-size:14px;color:var(--muted);white-space:nowrap;">.wav</span>
+        </div>
+        <p style="margin:10px 0 0;font-size:12px;color:var(--muted);line-height:1.5;">${_t('modal_wav_export_hint')}</p>
+      </div>
+      <div class="modal-footer" style="gap:10px;">
+        <button class="btn btn-sm" id="_wav_cancel">${_t('btn_cancel')}</button>
+        <button class="btn ok" id="_wav_ok">${_t('btn_wav_export_ok')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  const input = backdrop.querySelector('#_wav_name_input');
+  input.focus();
+  input.setSelectionRange(0, input.value.length);
+  input.addEventListener('focus', () => { input.style.borderColor = 'rgba(91,159,255,0.6)'; });
+  input.addEventListener('blur',  () => { input.style.borderColor = ''; });
+
+  function close() { backdrop.remove(); }
+  function confirm() {
+    let stem = input.value.trim() || defaultStem;
+    stem = stem.replace(/\.wav$/i, '');
+    close();
+    exportArrangementWav(stem + '.wav');
+  }
+  backdrop.querySelector('#_wav_ok').addEventListener('click', confirm);
+  backdrop.querySelector('#_wav_cancel').addEventListener('click', close);
+  backdrop.addEventListener('click', e => { if(e.target === backdrop) close(); });
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Enter') confirm();
+    if(e.key === 'Escape') close();
+  });
+}
+
+if(exportWavBtn){ exportWavBtn.addEventListener('click', _showWavExportDialog); }
 
 
 
@@ -3746,6 +4045,7 @@ if(exportWavBtn){ exportWavBtn.addEventListener('click', exportArrangementWav); 
       stopEngine();
       if(objectUrl) URL.revokeObjectURL(objectUrl); objectUrl=null;
       fileInput.value=''; fileInfo.textContent='–'; duration=0; audioBuffer=null; viewStart=0; viewDur=0;
+      bpmInput.value=''; playbackTempoBpm=null; _currentProjectName=null;
       markers=[]; cursorTime=0; renderMarkerList(); draw();
       // Editor zurücksetzen
       lyrics = []; markerHeaders=[]; lastActiveLine = -1;
@@ -5192,3 +5492,419 @@ document.addEventListener('DOMContentLoaded', function(){
     setupScrollHint(document.getElementById(id));
   });
 })();
+
+/* ========== Bestätigungs-Modal ========== */
+
+(function () {
+  let _confirmCb = null;
+
+  function _close() {
+    const m = document.getElementById('confirmModal');
+    if (m) m.style.display = 'none';
+    _confirmCb = null;
+  }
+
+  // Öffnet ein styled Bestätigungs-Modal als Ersatz für confirm().
+  // callback(true) bei OK, callback(false) bei Abbrechen.
+  window._showConfirmModal = function (title, text, okLabel, callback) {
+    const modal = document.getElementById('confirmModal');
+    if (!modal) { callback(confirm(text)); return; }
+    document.getElementById('confirmModalTitle').textContent = title;
+    document.getElementById('confirmModalText').textContent  = text;
+    const okBtn = document.getElementById('confirmModalOk');
+    if (okBtn && okLabel) okBtn.textContent = okLabel;
+    _confirmCb = callback;
+    modal.style.display = 'flex';
+  };
+
+  document.getElementById('confirmModalOk')    ?.addEventListener('click', () => { const cb = _confirmCb; _close(); if (cb) cb(true);  });
+  document.getElementById('confirmModalCancel')?.addEventListener('click', () => { const cb = _confirmCb; _close(); if (cb) cb(false); });
+})();
+
+/* ========== Eingabe-Modal ========== */
+
+(function () {
+  let _inputCb = null;
+
+  function _closeInputModal() {
+    const m = document.getElementById('inputModal');
+    if (m) m.style.display = 'none';
+    _inputCb = null;
+  }
+
+  // Öffnet das styled Eingabe-Modal als Ersatz für prompt().
+  // callback(value: string) bei OK, callback(null) bei Abbrechen.
+  window._showInputModal = function (title, defaultValue, callback) {
+    const modal   = document.getElementById('inputModal');
+    const titleEl = document.getElementById('inputModalTitle');
+    const field   = document.getElementById('inputModalField');
+    if (!modal || !field) { callback(prompt(title, defaultValue)); return; }
+
+    titleEl.textContent = title;
+    field.value = defaultValue || '';
+    _inputCb = callback;
+    modal.style.display = 'flex';
+    setTimeout(() => { try { field.focus(); field.select(); } catch(_) {} }, 80);
+  };
+
+  function _confirm() {
+    const val = document.getElementById('inputModalField')?.value ?? '';
+    const cb = _inputCb;
+    _closeInputModal();
+    if (cb) cb(val);
+  }
+
+  document.getElementById('inputModalConfirm')?.addEventListener('click', _confirm);
+  document.getElementById('inputModalCancel') ?.addEventListener('click', () => { const cb = _inputCb; _closeInputModal(); if (cb) cb(null); });
+  document.getElementById('inputModalClose')  ?.addEventListener('click', () => { const cb = _inputCb; _closeInputModal(); if (cb) cb(null); });
+  document.getElementById('inputModalField')  ?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') _confirm();
+    if (e.key === 'Escape') { const cb = _inputCb; _closeInputModal(); if (cb) cb(null); }
+  });
+})();
+
+/* ========== Android Bridge: Projekt Speichern / Laden ========== */
+
+// --- Hilfsfunktionen ---
+
+function _arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+function _base64ToArrayBuffer(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// --- Speichern-Dialog ---
+
+var _currentProjectName = null;
+
+function _androidShowSaveDialog() {
+  // Wenn bereits ein Projektname bekannt ist → erst fragen ob überschreiben oder neu
+  if (_currentProjectName) {
+    const choiceModal = document.getElementById('androidSaveChoiceModal');
+    const choiceText  = document.getElementById('androidSaveChoiceText');
+    if (choiceModal) {
+      if (choiceText) choiceText.textContent = _t('js_overwrite_confirm').replace('{name}', _currentProjectName);
+      choiceModal.style.display = 'flex';
+      return;
+    }
+  }
+  _androidOpenNameDialog();
+}
+
+function _androidOpenNameDialog() {
+  const modal = document.getElementById('androidSaveModal');
+  const input = document.getElementById('androidSaveNameInput');
+  if (!modal || !input) return;
+  const defaultName = _currentProjectName
+    || (loadedFileMeta && loadedFileMeta.name ? loadedFileMeta.name.replace(/\.[^.]+$/, '') : _t('js_default_project_name'));
+  input.value = defaultName;
+  modal.style.display = 'flex';
+  setTimeout(() => { try { input.focus(); input.select(); } catch(_) {} }, 120);
+}
+
+async function _androidDoSaveProject(overrideName) {
+  const input = document.getElementById('androidSaveNameInput');
+  const modal = document.getElementById('androidSaveModal');
+  const btn   = document.getElementById('androidSaveConfirmBtn');
+  const name  = (typeof overrideName === 'string' && overrideName.trim())
+    ? overrideName.trim()
+    : ((input ? input.value.trim() : '') || _t('js_default_project_name'));
+
+  if (btn) { btn.disabled = true; btn.textContent = _t('js_saving'); }
+  try {
+    const jsonStr = JSON.stringify(currentProject());
+    let audioBase64 = '', audioExt = 'mp3';
+    if (objectUrl) {
+      const resp = await fetch(objectUrl);
+      const buf  = await resp.arrayBuffer();
+      audioBase64 = _arrayBufferToBase64(buf);
+      audioExt = loadedFileMeta && loadedFileMeta.name
+        ? (loadedFileMeta.name.split('.').pop().toLowerCase() || 'mp3')
+        : 'mp3';
+    }
+    Android.saveProject(name, jsonStr, audioBase64, audioExt);
+    _currentProjectName = name;
+    if (!_autoSaveEnabled) _setAutoSave(true); // ab jetzt automatisch mitspeichern
+    if (modal) modal.style.display = 'none';
+  } catch(e) {
+    alert(_t('js_err_save') + e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = _t('btn_save'); }
+  }
+}
+
+// Save-Name-Modal
+document.getElementById('androidSaveConfirmBtn')?.addEventListener('click', () => _androidDoSaveProject());
+document.getElementById('androidSaveModalClose')?.addEventListener('click', () => {
+  const m = document.getElementById('androidSaveModal');
+  if (m) m.style.display = 'none';
+});
+document.getElementById('androidSaveNameInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') _androidDoSaveProject();
+});
+
+// Overwrite-Choice-Modal
+document.getElementById('androidSaveChoiceOverwrite')?.addEventListener('click', () => {
+  const m = document.getElementById('androidSaveChoiceModal');
+  if (m) m.style.display = 'none';
+  _androidDoSaveProject(_currentProjectName);
+});
+document.getElementById('androidSaveChoiceNew')?.addEventListener('click', () => {
+  const m = document.getElementById('androidSaveChoiceModal');
+  if (m) m.style.display = 'none';
+  _currentProjectName = null;
+  _androidOpenNameDialog();
+});
+document.getElementById('androidSaveChoiceClose')?.addEventListener('click', () => {
+  const m = document.getElementById('androidSaveChoiceModal');
+  if (m) m.style.display = 'none';
+});
+document.getElementById('androidSaveChoiceModal')?.addEventListener('click', (e) => {
+  if (e.target === document.getElementById('androidSaveChoiceModal'))
+    document.getElementById('androidSaveChoiceModal').style.display = 'none';
+});
+
+// --- Laden-Dialog ---
+
+function _androidShowLoadDialog() {
+  let projects;
+  try {
+    projects = JSON.parse(Android.listProjects());
+  } catch(e) { alert(_t('js_err_project_list') + e); return; }
+
+  const modal   = document.getElementById('androidLoadModal');
+  const listEl  = document.getElementById('androidProjectList');
+  if (!modal || !listEl) return;
+
+  listEl.innerHTML = '';
+  if (!projects || projects.length === 0) {
+    listEl.innerHTML = '<div style="color:rgba(255,255,255,0.4);text-align:center;padding:28px 0;">' + _t('js_no_projects_saved') + '</div>';
+  } else {
+    projects.slice().sort((a, b) => a.localeCompare(b)).forEach(name => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);';
+
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'btn';
+      loadBtn.style.cssText = 'flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      loadBtn.textContent = name;
+      loadBtn.onclick = () => _loadProjectFromAndroid(name);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn warn btn-sm';
+      delBtn.style.flexShrink = '0';
+      delBtn.title = _t('btn_delete');
+      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#fecaca" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>';
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        _showConfirmModal(
+          _t('modal_delete_project_title'),
+          _t('js_confirm_delete_project').replace('{name}', name),
+          _t('btn_delete'),
+          (ok) => {
+            if (!ok) return;
+            try { Android.deleteProject(name); } catch(_) {}
+            row.remove();
+            if (listEl.children.length === 0) {
+              listEl.innerHTML = '<div style="color:rgba(255,255,255,0.4);text-align:center;padding:28px 0;">' + _t('js_no_projects_saved') + '</div>';
+            }
+          }
+        );
+      };
+
+      row.appendChild(loadBtn);
+      row.appendChild(delBtn);
+      listEl.appendChild(row);
+    });
+  }
+  modal.style.display = 'flex';
+}
+
+document.getElementById('androidLoadModalClose')?.addEventListener('click', () => {
+  const m = document.getElementById('androidLoadModal');
+  if (m) m.style.display = 'none';
+});
+
+document.getElementById('loadProjectBtn')?.addEventListener('click', () => {
+  if (window.Android) {
+    _androidShowLoadDialog();
+  } else {
+    document.getElementById('loadProjectFile')?.click();
+  }
+});
+
+// --- Projekt aus Android-Speicher laden ---
+
+async function _loadProjectFromAndroid(name) {
+  const modal = document.getElementById('androidLoadModal');
+  if (modal) modal.style.display = 'none';
+
+  let json;
+  try {
+    const jsonStr = Android.loadProjectJson(name);
+    if (!jsonStr) { alert(_t('js_project_not_found')); return; }
+    json = JSON.parse(jsonStr);
+  } catch(e) { alert(_t('js_err_load') + e); return; }
+
+  // --- JSON-Zustand wiederherstellen (identisch zu loadProjectInput-Handler) ---
+  try { pendingProject = json; } catch(_) {}
+  _arrangementRestoreData = (json.arrangementEditorMode === true && json.arrangementLyrics && typeof json.arrangementLyrics === 'object')
+    ? { lyrics: json.arrangementLyrics } : null;
+  try { loadedProjectMarkerBase = (json && json.markerTimeBase === 'original') ? 'original' : 'trimmed'; } catch(_) { loadedProjectMarkerBase = 'trimmed'; }
+  try {
+    if (json && json.trim) {
+      projectTrim.start = Number.isFinite(json.trim.start) ? json.trim.start : 0;
+      projectTrim.end   = Number.isFinite(json.trim.end)   ? json.trim.end   : null;
+    } else { projectTrim = { start: 0, end: null }; }
+  } catch(_) { projectTrim = { start: 0, end: null }; }
+
+  playSeqOrder = !!json.playSeqOrder;
+  if (typeof playSeqToggle !== 'undefined' && playSeqToggle) playSeqToggle.checked = playSeqOrder;
+  bpmInput.value = json.bpm || 120;
+  try {
+    beatsPerBar = (json.timeSig === 3 ? 3 : 4);
+    if (typeof timeSigSelect !== 'undefined' && timeSigSelect) timeSigSelect.value = String(beatsPerBar);
+    minView = Math.max(0.25, gridStep() / 4);
+    setView(viewStart, viewDur || (duration || 0));
+  } catch(_) {}
+  cursorTime = +json.cursorTime || 0;
+  markers = Array.isArray(json.markers) ? json.markers.map((m, i) => ({
+    id: m.id || uid(), time: +m.time || 0, label: (m.label || ''), active: !!m.active,
+    listOrder: Number.isFinite(m.listOrder) ? +m.listOrder : i,
+    pin: (m.pin || undefined),
+    seqReps: Number.isFinite(m.seqReps) ? Math.max(0, Math.floor(m.seqReps)) : 1,
+    muted: (m.muted === true), playlistClone: (m.playlistClone === true),
+    playlistCloneOf: (m.playlistCloneOf || undefined),
+    note: (typeof m.note === 'string' ? m.note : undefined)
+  })) : [];
+  markers.sort((a, b) => (a.listOrder ?? 0) - (b.listOrder ?? 0));
+  const vs = Number.isFinite(json.viewStart) ? +json.viewStart : 0;
+  const vd = Number.isFinite(json.viewDur) && json.viewDur > 0 ? +json.viewDur : (duration || 0);
+  setView(vs, vd > 0 ? vd : (duration || 0));
+  arrangementEditorMode = false; arrangementSegments = [];
+  try { if (importMarkersBtn) importMarkersBtn.classList.remove('active'); } catch(_) {}
+  lyrics = Array.isArray(json.lyrics) ? json.lyrics.slice() : [];
+  orphanedLines = Array.isArray(json.orphanedLines)
+    ? json.orphanedLines.map(g => ({ label: String(g.label || ''), lines: Array.isArray(g.lines) ? g.lines.map(String) : [] })).filter(g => g.lines.length > 0)
+    : [];
+  renderLyricsList();
+  renderMarkerList(); draw();
+
+  // --- Audiodatei aus Android-Speicher laden (via WebViewAssetLoader-URL) ---
+  _showPitchLoadingUI(true);
+  try {
+    const audioUrl = Android.getAudioUrl(name);
+    if (!audioUrl) { _showPitchLoadingUI(false); alert(_t('js_audio_not_found')); return; }
+    const audioExt = audioUrl.split('.').pop().toLowerCase() || 'mp3';
+    const mimeType = audioExt === 'wav' ? 'audio/wav' : (audioExt === 'ogg' ? 'audio/ogg' : 'audio/mpeg');
+    const resp     = await fetch(audioUrl);
+    if (!resp.ok) { _showPitchLoadingUI(false); alert(_t('js_err_audio_load') + 'HTTP ' + resp.status); return; }
+    const arrayBuf = await resp.arrayBuffer();
+
+    audioBuffer  = await getDecodeAC().decodeAudioData(arrayBuf.slice(0));
+    duration     = audioBuffer.duration;
+    sampleRate   = audioBuffer.sampleRate;
+    pitchedBuffer = null; pitchSt = 0;
+    try { updatePitchUI(); } catch(_) {}
+    playbackTempoBpm = null;
+    try { updateTempoUI(); } catch(_) {}
+
+    // Pitch / Tempo aus Projekt wiederherstellen
+    try {
+      if (pendingProject && Number.isFinite(pendingProject.pitchSt) && pendingProject.pitchSt !== 0) {
+        pitchSt = Math.max(-24, Math.min(24, Math.round(pendingProject.pitchSt)));
+        updatePitchUI();
+      }
+      if (pendingProject && pendingProject.playbackTempoBpm !== null && Number.isFinite(pendingProject.playbackTempoBpm)) {
+        playbackTempoBpm = Math.max(1, Math.min(999.5, pendingProject.playbackTempoBpm));
+        updateTempoUI();
+      }
+    } catch(_) {}
+
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    // objectUrl direkt auf die Asset-URL setzen – kein Blob-Umweg nötig
+    objectUrl = audioUrl;
+    const audioFilename = json.relativeAudio || ('audio.' + audioExt);
+    loadedFileMeta    = { name: audioFilename, size: arrayBuf.byteLength, type: mimeType, lastModified: 0 };
+    relativeAudioName = audioFilename;
+    fileInfo.textContent = audioFilename;
+    if (viewDur === 0) { setView(0, duration); }
+    draw();
+    rebuildLyrics({ preserve: true });
+
+    // Trim anwenden
+    try {
+      if (pendingProject && pendingProject.trim) {
+        projectTrim.start = Number.isFinite(pendingProject.trim.start) ? pendingProject.trim.start : 0;
+        projectTrim.end   = Number.isFinite(pendingProject.trim.end)   ? pendingProject.trim.end   : (audioBuffer.duration || 0);
+        const sliced = applyProjectTrimOnBuffer(audioBuffer);
+        if (sliced) {
+          audioBuffer = sliced;
+          duration    = audioBuffer.duration || duration;
+          let sM = markers.find(m => m.pin === 'start');
+          let eM = markers.find(m => m.pin === 'end');
+          if (!sM || !eM) {
+            markers = (markers || []).filter(m => !m.pin);
+            markers.unshift({ id: uid(), time: 0,        label: 'Start', active: true, pin: 'start', listOrder: 0,               seqReps: 1 });
+            markers.push(   { id: uid(), time: duration, label: _t('js_marker_end_label'),  active: true, pin: 'end',   listOrder: markers.length, seqReps: 1 });
+          } else { sM.time = 0; eM.time = duration; }
+          minView = Math.max(0.25, gridStep() / 4);
+          setView(0, Math.max(minView, Math.min(viewDur || duration, duration)));
+          draw();
+          rebuildLyrics({ preserve: true });
+        }
+      } else {
+        projectTrim.start = 0;
+        projectTrim.end   = audioBuffer.duration || 0;
+      }
+    } catch(_) {}
+
+    try { if (timeSigSelect) timeSigSelect.value = String(beatsPerBar); } catch(_) {}
+    ensureDefaultStartEndMarkers();
+
+    // Arrangement-Editor-Modus wiederherstellen
+    try {
+      if (_arrangementRestoreData && _arrangementRestoreData.lyrics) {
+        const segs = buildArrangementForEditor();
+        if (segs.length > 0) {
+          const totalLines = segs[segs.length - 1].lineStartIdx + segs[segs.length - 1].lineCount;
+          const newLyrics  = new Array(totalLines).fill('');
+          for (const seg of segs) {
+            const segLines = _arrangementRestoreData.lyrics[seg.segKey] || [];
+            for (let j = 0; j < Math.min(seg.lineCount, segLines.length); j++) {
+              newLyrics[seg.lineStartIdx + j] = segLines[j] || '';
+            }
+          }
+          lyrics              = newLyrics;
+          arrangementSegments = segs;
+          arrangementEditorMode = true;
+          perSegmentLineNumbering = true;
+          try { if (importMarkersBtn) importMarkersBtn.classList.add('active'); } catch(_) {}
+          renderLyricsList();
+        }
+      }
+      _arrangementRestoreData = null;
+    } catch(_) { _arrangementRestoreData = null; }
+
+    try { pendingProject = null; } catch(_) {}
+    try { _triggerPitchTempoAsync(); } catch(_) {}
+    if (!_pitchPending) _showPitchLoadingUI(false);
+    _currentProjectName = name;
+    if (!_autoSaveEnabled) _setAutoSave(true); // Projekt geladen → Autosave an
+
+  } catch(err) {
+    _showPitchLoadingUI(false);
+    alert(_t('js_err_audio_load') + (err && err.message ? err.message : err));
+  }
+}

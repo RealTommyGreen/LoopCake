@@ -32,8 +32,11 @@
 /* Suppress browser default focus outline on mouse/touch click;
    keep a styled outline for keyboard navigation (accessibility).
    Works across Chrome, Firefox, Safari, Edge. */
-:focus          { outline: none; }
-:focus-visible  { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus                       { outline: none; }
+:focus-visible               { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Buttons blur themselves after touch — no persistent focus ring */
+.btn:focus-visible,
+.media-fab .fab:focus-visible { outline: none; }
 
 html, body { height: 100%; background: var(--bg); color: var(--text); }
 body {
@@ -225,9 +228,18 @@ body {
   border-bottom: 1px solid rgba(255,255,255,0.04);
   flex-shrink: 0;
 }
-.logo-wrap img       { display: block; margin: 0 auto; height: auto; max-width: 300px; width: 100%; filter: drop-shadow(0 2px 12px rgba(91,159,255,0.08)); }
-.logo-wrap .info-badge { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); }
-.logo-wrap .lang-select { position: absolute; right: 56px; top: 50%; transform: translateY(-50%); }
+.logo-wrap img { display: block; margin: 0 auto; height: auto; max-width: 300px; width: 100%; filter: drop-shadow(0 2px 12px rgba(91,159,255,0.08)); }
+
+/* ---------- Top-Bar (Sprache + Info) ---------- */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 2px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 6px;
+}
 
 /* ---------- Title ---------- */
 .title-wrap {
@@ -371,21 +383,46 @@ select option {
   transition: transform 0.16s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.2s ease, border-color 0.2s ease;
   user-select: none;
 }
-.media-fab .fab:hover {
-  border-color: rgba(91,159,255,0.7);
-  box-shadow:
-    0 14px 44px rgba(0,0,0,0.65),
-    0 0 0 6px rgba(91,159,255,0.12),
-    0 0 20px rgba(91,159,255,0.15);
-  transform: scale(1.06) translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .media-fab .fab:hover {
+    border-color: rgba(91,159,255,0.7);
+    box-shadow:
+      0 14px 44px rgba(0,0,0,0.65),
+      0 0 0 6px rgba(91,159,255,0.12),
+      0 0 20px rgba(91,159,255,0.15);
+    transform: scale(1.06) translateY(-1px);
+  }
+  .media-fab .fab.stop:hover {
+    border-color: rgba(255,79,79,0.7);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.65), 0 0 0 6px rgba(255,79,79,0.1), 0 0 20px rgba(255,79,79,0.12);
+  }
 }
-.media-fab .fab:active     { transform: scale(0.96); }
+.media-fab .fab:active,
+.media-fab .fab.pressing {
+  transform: scale(0.82);
+  background: linear-gradient(145deg, rgba(91,159,255,0.30) 0%, rgba(91,159,255,0.08) 100%), #1a1a2a;
+  border-color: rgba(91,159,255,0.95);
+  box-shadow:
+    0 3px 10px rgba(0,0,0,0.5),
+    0 0 0 5px rgba(91,159,255,0.22),
+    0 0 18px rgba(91,159,255,0.30);
+  transition:
+    transform 0.07s ease,
+    box-shadow 0.07s ease,
+    border-color 0.07s ease,
+    background 0.07s ease;
+}
+.media-fab .fab.stop:active,
+.media-fab .fab.stop.pressing {
+  background: linear-gradient(145deg, rgba(255,79,79,0.30) 0%, rgba(255,79,79,0.08) 100%), #1f1313;
+  border-color: rgba(255,100,100,0.95);
+  box-shadow:
+    0 3px 10px rgba(0,0,0,0.5),
+    0 0 0 5px rgba(255,79,79,0.22),
+    0 0 18px rgba(255,79,79,0.30);
+}
 .media-fab .fab svg        { width: 28px; height: 28px; }
 .media-fab .fab.stop       { border-color: rgba(255,79,79,0.4); background: linear-gradient(145deg, rgba(255,79,79,0.1) 0%, rgba(0,0,0,0) 100%), #13131a; }
-.media-fab .fab.stop:hover {
-  border-color: rgba(255,79,79,0.7);
-  box-shadow: 0 14px 44px rgba(0,0,0,0.65), 0 0 0 6px rgba(255,79,79,0.1), 0 0 20px rgba(255,79,79,0.12);
-}
 
 /* Originalbuttons durch FABs ersetzt – !important schützt gegen JS-seitige style.display-Aufrufe */
 #playSel, #pauseBtn { display: none !important; }
@@ -505,27 +542,17 @@ select option {
   min-height: 32px;
 }
 
-/* ---------- Language Selector ---------- */
-.lang-select {
-  background: #1c1c26;
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #b0b8d0;
-  border-radius: 6px;
-  padding: 3px 6px;
+/* ---------- Language Button ---------- */
+.lang-btn {
+  min-width: 36px;
+  padding: 3px 8px;
   font-size: 11px;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.lang-select:hover, .lang-select:focus {
-  border-color: rgba(144,202,249,0.4);
-  color: #eaeaf0;
+  letter-spacing: 0.04em;
 }
 
 /* ---------- Info- & Hilfe-Badges ---------- */
 .info-badge {
-  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-  width: 30px; height: 30px; border-radius: 999px;
+  width: 30px; height: 30px; border-radius: 999px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid rgba(91,159,255,0.4);
   background: linear-gradient(160deg, rgba(91,159,255,0.1) 0%, transparent 100%), var(--panel);
@@ -533,7 +560,7 @@ select option {
   cursor: pointer; user-select: none;
   transition: transform .16s cubic-bezier(0.34,1.3,0.64,1), box-shadow var(--speed) ease, border-color var(--speed) ease;
 }
-.info-badge:hover { border-color: rgba(91,159,255,0.7); transform: translateY(-50%) scale(1.07); box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 16px rgba(91,159,255,0.15); }
+.info-badge:hover { border-color: rgba(91,159,255,0.7); transform: scale(1.07); box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 16px rgba(91,159,255,0.15); }
 .info-badge svg   { width: 16px; height: 16px; }
 
 .help-badge {
@@ -887,4 +914,30 @@ select option {
 @keyframes scroll-hint-pulse {
   0%, 100% { opacity: 0.4; transform: translateY(0); }
   50%       { opacity: 1;   transform: translateY(2px); }
+}
+
+
+/* ---------- Toast Notification ---------- */
+.lc-toast {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: rgba(30, 30, 46, 0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #dde0f0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 300000;
+}
+.lc-toast.lc-toast--in {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
